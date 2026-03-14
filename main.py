@@ -25,14 +25,32 @@ eng = EnglishModule(gs_eng, sheet_name=settings.ENGLISH_SHEET_NAME)
 
 # Configuration for vocabulary distribution (Flexible counts per session)
 # Cấu hình phân bổ từ vựng (Số lượng linh hoạt cho mỗi buổi)
-# new: từ mới toanh, recap: ôn từ mới trong ngày, old: ôn từ cũ các ngày trước
-# None = lấy tất cả danh sách hiện có của nhóm đó
+# new: từ mới toanh, recap: ôn từ mới trong ngày (None = lấy tất cả danh sách hiện có)
+# old_ratio: Tỉ lệ từ cũ cần ôn, nhập theo số thập phân (ví dụ: 0.1 = 1/10, 0.2 = 2/10).
+# Buổi cuối cùng (Evening) để None để máy tính tự dồn toàn bộ số từ còn sót lại trong ngày.
 ENGLISH_CONFIG = {
-    "Morning":   {"new": 2, "recap": 0, "old": 5},
-    "Noon":      {"new": 2, "recap": 2, "old": 5},
-    "Afternoon": {"new": 1, "recap": 4, "old": 5},
-    "Evening":   {"new": 0, "recap": None, "old": None}
+    "Morning":   {"new": 2, "recap": 0,    "old_ratio": 0.0},
+    "Noon":      {"new": 2, "recap": 2,    "old_ratio": 0.1},
+    "Afternoon": {"new": 1, "recap": 4,    "old_ratio": 0.4},
+    "Evening":   {"new": 0, "recap": None, "old_ratio": None}
 }
+
+# ================= HELPERS =================
+
+def get_current_greeting():
+    """Returns a greeting based on the current system hour."""
+    hour = datetime.now().hour
+    
+    if 5 <= hour < 11:
+        return "🌅 Good morning!"
+    elif 11 <= hour < 13:
+        return "🕛 Good noon!"
+    elif 13 <= hour < 18:
+        return "🕓 Good afternoon!"
+    elif 18 <= hour < 22:
+        return "🌙 Good evening!"
+    else:
+        return "🌌 Good night!"
 
 # ================= TASKS =================
 
@@ -41,18 +59,34 @@ def send_bulletin(session_name, is_first_run=False):
     print(f"🔔 Running {session_name} Bulletin...")
     
     # 1. Lời chào & Thông tin thời tiết
-    greeting = "🌅 Chào buổi sáng!" if session_name == "Morning" else \
-               "🕛 Chào buổi trưa!" if session_name == "Noon" else \
-               "🕓 Chào buổi chiều!" if session_name == "Afternoon" else "🌙 Chúc buổi tối tốt lành!"
-    bot.send(f"{greeting}\n\n" + weather.get_report())
+    bot.send(f"{get_current_greeting()}\n\n" + weather.get_report())
 
     # 2. Từ vựng tiếng Anh
     if not (session_name == "Morning" and is_first_run):
-        conf = ENGLISH_CONFIG.get(session_name, {"new": 0, "recap": 0, "old": 0})
+        conf = ENGLISH_CONFIG.get(session_name, {})
+        
+        # Tự động tính target / remaining theo chuỗi tỉ lệ
+        old_ratio_val = conf.get("old_ratio")
+        calculated_ratio = None
+        if old_ratio_val is not None:
+            # Tính tổng các tỉ lệ đã đi qua ở các buổi trước
+            ratio_done = 0.0
+            for s in ["Morning", "Noon", "Afternoon", "Evening"]:
+                if s == session_name:
+                    break
+                s_ratio = ENGLISH_CONFIG.get(s, {}).get("old_ratio")
+                if isinstance(s_ratio, (int, float)):
+                    ratio_done += float(s_ratio)
+            
+            calculated_ratio = {
+                "target": float(old_ratio_val),
+                "remaining": max(0.01, 1.0 - ratio_done) # max chống lỗi chia cho 0
+            }
+
         new_w, recap_w, old_w = eng.get_session_words(
             num_new=conf.get("new", 0), 
             num_recap=conf.get("recap", 0), 
-            num_old=conf.get("old", 0)
+            old_ratio=calculated_ratio
         )
         title = f"HỌC TIẾNG ANH ({session_name})"
         bot.send(eng.format_bulletin(title, new_w, recap_w, old_w))
@@ -83,7 +117,7 @@ def afternoon_job():
 
 def evening_job():
     send_bulletin("Evening")
-    bot.send("🌙 Good night!")
+    bot.send("🌙 Bye!")
 
 # ================= SCHEDULING =================
 

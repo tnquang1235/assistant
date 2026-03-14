@@ -62,7 +62,8 @@ class GoogleSheetManager:
             else:
                 last_record = match.iloc[-1]
                 changed = False
-                for col in ["close", "volume"]:
+                cols_to_check = ["open", "high", "low", "close", "volume"]
+                for col in cols_to_check:
                     if col in new_row and float(new_row[col]) != float(last_record.get(col, 0)):
                         changed = True
                         break
