@@ -1,102 +1,109 @@
-# 🤖 Assistant v1.3 - Tự Động Hóa Quản Lý Cá Nhân
-
-Assistant v1.3 là một hệ thống trợ lý cá nhân đa năng, hoạt động như một dịch vụ chạy ngầm trên máy tính nhằm tự động thu thập dữ liệu và gửi các bản tin tóm tắt hàng ngày qua thư viện Telegram Bot. Dự án sử dụng mô hình kiến trúc dạng Modular (các file module độc lập được lập lịch từ `main.py`) giúp tối ưu quá trình bảo trì và phát triển.
-
-Dự án hiện đang hỗ trợ 4 tính năng chính: **Thông tin Thời tiết, Học và Ôn Tiếng Anh, Chứng Khoán Thế Giới** và **Chứng Khoán Việt Nam**.
-
-Lưu ý: Bạn không cần sở hữu cơ sở dữ liệu riêng, hệ thống lấy **Google Sheets** làm điểm kết nối Cloud trung tâm - biến nó thành "Data Warehouse" cá nhân hoàn toàn miễn phí.
+# 🤖 Assistant v1.3 - Trợ lý Cá Nhân
+*(Cho những ai không đủ tiền để thuê một trợ lý chân dài)*
 
 ---
 
-## 🌟 Chức Năng Nổi Bật 🌟
+## 🚀 Tổng Quan Dự Án
+**Assistant v1.3** là hệ thống trợ lý cá nhân tự động hóa, hoạt động 24/7 như một dịch vụ chạy ngầm. Hệ thống chuyên nghiệp hóa việc theo dõi thông tin, học tập và quản lý tài chính cá nhân thông qua giao diện Telegram thân thiện.
 
-### 1. 🌦 Thông Tin Thời Tiết (Weather Module)
-- Tích hợp **OpenWeatherMap API**.
-- Báo cáo thời tiết nhanh dạng "Snapshot" qua Telegram (hiển thị tốt trên mobile).
-- Theo dõi nhiều thành phố cùng lúc (VD: Hồ Chí Minh, Cần Thơ) với các chỉ số: Nhiệt độ, Cao/Thấp, Độ ẩm và Trạng thái.
-
-### 2. 🧠 Học Tiếng Anh cùng Spaced Repetition (English Module)
-Thuật toán được thiết kế dựa trên lý thuyết "Đường cong quên lãng" (Ebbinghaus). Giúp học ít mà nhớ bền bằng cách ôn tập ngắt quãng:
-- **Nguyên lý SRS**: Tự động tính toán hiển thị lại các từ vựng vào ngày `+1`, `+3`, `+7`, `+30` và random `60-90` ngày.
-- **Tính năng Challenge**: Từ nào chưa có ví dụ (Example), Bot sẽ yêu cầu (trigger) cấu trúc B2 ngẫu nhiên để bạn nghĩ ra ví dụ tương thích.
-- Bảng từ vựng lấy trực tiếp từ Google Sheets, chia ca linh hoạt linh động cho sáng/trưa/chiều.
-
-### 3. 🌍 Thị Trường Thế Giới (Finance Module)
-- Tích hợp **Yahoo Finance API (yfinance)** để gọi số liệu đa quốc gia.
-- Theo dõi đủ các loại tài sản: Chỉ số chứng khoán (SP500, DowJones, Nikkei...), Hàng hoá (Gold, Silver), Tiền điện tử (Bitcoin)...
-- **Theo dõi biến động sâu sắc**: Tính và xuất thẳng báo cáo 1 Ngày (1D), 1 Tuần (1W), 1 Tháng (1M), 1 Quý (1Q) và 1 Năm (1Y) cho đa tài sản trên một màn hình Telegram gọn gàng, ngay ngắn.
-
-### 4. 🇻🇳 Chứng Khoán Việt Nam (VNFinance Module) - *Data Warehouse Tự Động*
-- Không phụ thuộc API bên thứ 3 mắc mỏ hoặc trễ nhịp. Sử dụng **Selenium/SCC** để lấy giá trực tiếp từ bảng điện Vietstock (VN30).
-- **Google Sheets Data Warehouse**: Toàn bộ hơn 27 chỉ số kĩ thuật (Giá trần/sàn, Bid/Ask Price, Volume, Ngoại khối...) sẽ được tự động cào (scrape) và "đắp" liên tục vào Sheet. Tự động sinh thêm tên Cột nếu bạn tùy biến mã nguồn thêm trường mới. Dữ liệu chốt cuối ngày sẽ nằm lại vĩnh viễn trên sheet tạo thành kho Database riêng cho sau này.
-- **Bản tin Telegram Lọc Thông Minh (No Repetition)**:
-  - *Sáng (Morning)*: Nhắc cổ tức/sự kiện (`*` / `**`) và dòng tiền Khối ngoại hôm qua.
-  - *Trưa/Chiều (Noon/Afternoon)*: Quét 3 mã kịch biên độ (Sàn/Trần), 3 mã Biến động mạnh nhất, 3 mã Thanh Khoản Đột biến và Báo cáo riêng biệt Khối lượng Mua Ròng/Bán Ròng Khối Ngoại.
+Hệ thống sử dụng triết lý **"Snapshot"**: Cung cấp thông tin cô đọng, nhanh gọn, tối ưu hoàn hảo cho trải nghiệm di động.
 
 ---
 
-## 🛠 Hướng Dẫn Cài Đặt và Khởi Chạy
+## 🌟 Tính Năng Cốt Lõi
 
-### Cài đặt môi trường
-Đảm bảo bạn đã cài Python (>=3.10) và pip:
+### 🌦️ 1. Weather Snapshot
+*   **Nguồn dữ liệu:** OpenWeatherMap API.
+*   **Phạm vi:** Theo dõi cùng lúc nhiều địa điểm (Hồ Chí Minh, Cần Thơ, ...).
+*   **Số liệu:** Nhiệt độ thực tế, Cảm giác như (Feels like), Độ ẩm, Tầm nhìn và Trạng thái thời tiết.
+
+### 🧠 2. Smart English Learning (SRS)
+*   **Thuật toán:** Spaced Repetition (SRS) dựa trên đường cong quên lãng Ebbinghaus.
+*   **Lộ trình:** Tự động nhắc nhở ôn tập vào các mốc `+1`, `+3`, `+7`, `+30` ngày.
+*   **B2 Grammar Challenge:** Tự động kích hoạt thử thách đặt câu với cấu trúc ngữ pháp cao cấp khi từ vựng thiếu ví dụ.
+*   **Google Sheets:** Giúp người dùng có thể quản lý việc học của mình thủ công: thêm nghĩa từ, thay đổi ngày học, ngày ôn...
+
+### 🌍 3. Global Finance Portal
+*   **Nguồn:** Yahoo Finance (yfinance).
+*   **Tài sản:** Chứng khoán Mỹ/Á/Âu, Vàng, Bạc, Bitcoin.
+*   **Báo cáo:** So sánh biến động đa khung thời gian: 1 Ngày (1D), 1 Tuần (1W), 1 Tháng (1M), 1 Quý (1Q), 1 Năm (1Y).
+
+### 🇻🇳 4. VN Stock Data Warehouse
+*   **Công nghệ:** Scraper tùy chỉnh (Selenium/SCC) lấy dữ liệu trực tiếp từ bảng điện Vietstock.
+*   **Data Warehouse:** Sử dụng Google Sheets làm kho lưu trữ lịch sử 27+ chỉ số kỹ thuật của nhóm VN30.
+*   **Lọc thông minh:** 
+    *   **Morning:** Cảnh báo mã cổ phiếu có sự kiện đặc biệt (`*`/`**`) & Giao dịch khối ngoại.
+    *   **Mid-day/End-day:** Top mã kịch trần/sàn, Top biến động mạnh, Top thanh khoản đột biến.
+
+---
+
+## 🛠️ Yêu Cầu & Cấu Hình
+
+| Thành phần | Yêu cầu |
+| :--- | :--- |
+| **Ngôn ngữ** | Python 3.10+ |
+| **Nền tảng** | Windows (PC) hoặc Linux (Raspberry Pi 4/5) |
+| **Database** | Google Sheets API (Data Warehouse) |
+| **Browser** | Google Chrome + ChromeDriver (cho VN Scraper) |
+| **API Keys** | Telegram Bot Token, OpenWeatherMap API Key |
+
+---
+
+## 📦 Cài Đặt Nhanh
+
+**1. Clone dự án và cài thư viện:**
 ```bash
 pip install -r requirements.txt
 ```
 
-### Chuẩn bị kết nối
-1. Copy file `.env.example` thành file có tên `.env` ở thư mục gốc. Điền đầy đủ:
-   - Token & Chat ID Telegram.
-   - API Key của OpenWeatherMap.
-   - Các ID Google Sheet của bạn.
-2. Tải File Credentials dạng JSON của **Google Cloud Service Account**, đổi tên hoặc cấu hình đúng đường dẫn nằm trong `.env`. Share quyền "Editor" của từng Sheet qua email của Service Account này.
-3. Download sẵn **ChromeDriver** cài vào thư mục chính để tool cào dữ liệu được cấp quyền.
+**2. Thiết lập môi trường:**
+*   Copy `samples/.env.example` thành `.env`.
+*   Điền đầy đủ API Keys và ID Google Sheets.
+*   Đặt file `service-account.json` của Google Cloud vào thư mục gốc.
 
-### Khởi động Bot
-Mở Cmd (Terminal) tại thư mục chứa dự án và gõ:
+**3. Khởi chạy:**
 ```bash
 python main.py
 ```
-> "Assistant v1.3 đang chạy..."
-*Bot sẽ tự động ngủ (Sleep) và kích hoạt gửi bản tin chính xác theo lịch của máy ở các mốc: 06:00, 12:00, 16:00, 22:00.*
 
 ---
 
-## 🍓 Triển Khai Server 24/7 (Linux & Raspberry Pi)
+## 🍓 Triển Khai Raspberry Pi (Server 24/7)
 
-Assistant v1.3 được thiết kế tự động tương thích ngược giữa Windows (PC) và Linux (Raspberry Pi/Ubuntu) mà bạn **KHÔNG CẦN SỬA MÃ NGUỒN**.
+Hệ thống tự động phát hiện hệ điều hành để cấu hình **Chrome Controller**:
+*   **Auto-Linux Path:** Trỏ trực tiếp vào `/usr/bin/chromedriver`.
+*   **Resource Optimization:** Tự động kích hoạt các cờ `--no-sandbox` và `--disable-dev-shm-usage` để chạy ổn định trên RAM hạn chế của Pi.
 
-Trọng tâm là thư viện cào số liệu **scc**, trên Windows hệ thống sử dụng file `chromedriver.exe` thông thường. Tuy nhiên, khi đưa lên các thiết bị chip ARM (Raspberry Pi), hệ thống sẽ tự động quét và áp dụng chế độ tối ưu tài nguyên:
-- **Tự động nhận diện Linux:** Chuyển đường dẫn gọi Driver sang `/usr/bin/chromedriver`.
-- **Tự động thêm cờ tối ưu (Flags):** Tự động đính kèm `--no-sandbox` (Bypass lỗi phân quyền root) và đặc biệt là `--disable-dev-shm-usage` (ép lưu tạm trên thẻ nhớ thay cho RAM - chống crash Memory-Leak khi tải trang Vietstock nặng trên máy ảo/Pi).
-
-### Cách cài đặt trên Raspberry Pi (Debian/Ubuntu)
-Thay vì tải thủ công file `.exe`, bạn chỉ cần chạy lệnh sau trên Terminal để hệ điều hành tải về bộ mã nguồn duyệt web cho kiến trúc ARM tương ứng:
+**Cài đặt trên Linux:**
 ```bash
-sudo apt-get update
-sudo apt-get install chromium-browser chromium-chromedriver
+sudo apt-get update && sudo apt-get install chromium-browser chromium-chromedriver
 ```
-Sau đó, tiếp tục cài đặt `pip install -r requirements.txt` và chạy file `main.py` bình thường. Bot sẽ chạy siêu nhẹ và ổn định trong hàng tháng ròng rã!
 
 ---
 
-## 📁 Cấu trúc thư mục (Modular Design)
+## 📁 Kiến Trúc Hệ Thống (Modular Design)
 ```text
 assistant_v1.3/
-├── main.py                # Điểm khởi chạy chính & Scheduler
-├── config.py              # Xử lý load System Environment (.env)
-├── modules/               # Nơi chứa các tính năng độc lập
-│   ├── english.py         # SRS Tiếng Anh
-│   ├── finance.py         # World Finance Info
-│   ├── vn_finance.py      # SCC Scrape data VN30 => Data Warehouse
-│   ├── weather.py         # REST API Weather
-│   ├── google_sheets.py   # Connection Manager, Dynamic Field Mapping
-│   └── notifier.py        # Telegram Push Message
-├── scc/                   # Thư viện Chrome Controller ẩn của user
-├── samples/               # Định dạng mẫu (Headers) cho Google Sheets gốc
-└── .env                   # Environment & Keys (Cần cung cấp ở Local)
+├── main.py                # Nhạc trưởng điều phối (Scheduler)
+├── config.py              # Quản lý cấu hình & Biến môi trường
+├── modules/               # Các module chức năng độc lập
+│   ├── vn_finance.py      # SCC Scraper => Data Warehouse
+│   ├── finance.py         # World Markets Info
+│   ├── english.py         # SRS Engine
+│   ├── weather.py         # Weather API Handler
+│   ├── google_sheets.py   # Data Connection Manager
+│   └── notifier.py        # Telegram Push Engine
+├── scc/                   # Chrome Controller Core (v1.3 Optimized)
+├── samples/               # Mẫu cấu hình & Sheet Header
+└── .env                   # Bí mật quân sự (Cần điền đầy đủ)
 ```
 
-## 📈 Lộ trình phát triển (Roadmap)
-- [] Tích hợp Chart/Heatmap chụp ảnh màn hình gửi qua Telegram thay vì text chay.
-- [] Xây dựng Logic Backtest cho dữ liệu trong Google Sheet Data Warehouse (Phân kì RSI/MACD,...).
-- [] Khả năng ra lệnh Text Input thẳng trên nền Telegram cho Bot lập lịch/thêm từ vựng (Webhook mode).
+---
+
+## 📈 Lộ Trình Phát Triển (Roadmap)
+- [ ] 📊 **Visual Analytics:** Chụp ảnh Heatmap & Chart gửi qua Telegram.
+- [ ] 🤖 **Interactive Commands:** Ra lệnh cho Bot qua tin nhắn (Webhook mode).
+- [ ] 📉 **Techanical Alerts:** Cảnh báo RSI/MACD tự động từ kho dữ liệu Google Sheets.
+
+---
+*Created with ❤️ for smarter management.*
