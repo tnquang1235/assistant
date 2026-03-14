@@ -12,13 +12,16 @@ class Settings:
         
         # Module-specific IDs
         self.ENGLISH_SHEET_ID = os.getenv("ENGLISH_SHEET_ID")
-        self.ENGLISH_SHEET_NAME = os.getenv("ENGLISH_SHEET_NAME", "english_vocab")
+        self.ENGLISH_SHEET_NAME = os.getenv("ENGLISH_SHEET_NAME")
         
         self.FINANCE_SHEET_ID = os.getenv("FINANCE_SHEET_ID")
-        self.FINANCE_SHEET_NAME = os.getenv("FINANCE_SHEET_NAME", "daily_fin")
+        self.FINANCE_SHEET_NAME = os.getenv("FINANCE_SHEET_NAME")
         
         self.WEATHER_SHEET_ID = os.getenv("WEATHER_SHEET_ID")
-        self.WEATHER_SHEET_NAME = os.getenv("WEATHER_SHEET_NAME", "weather")
+        self.WEATHER_SHEET_NAME = os.getenv("WEATHER_SHEET_NAME")
+
+        self.VN_FINANCE_SHEET_ID = os.getenv("VN_FINANCE_SHEET_ID")
+        self.VN_FINANCE_SHEET_NAME = os.getenv("VN_FINANCE_SHEET_NAME")
 
         self._validate()
 

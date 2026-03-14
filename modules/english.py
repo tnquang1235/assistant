@@ -13,70 +13,18 @@ class EnglishModule:
         self.sheet_name = sheet_name
         self.tz = pytz.timezone(timezone)
 
-    def _normalize_date(self, date_str):
-        """Standardize date string from Google Sheets to YYYY-MM-DD format."""
-        if not date_str: return ""
-        date_str = str(date_str).strip()
-        try:
-            if "/" in date_str:
-                parts = date_str.split("/")
-                if len(parts) == 3:
-                    if len(parts[0]) == 4: # YYYY/MM/DD
-                        return f"{parts[0]}-{parts[1].zfill(2)}-{parts[2].zfill(2)}"
-                    # Assume DD/MM/YYYY
-                    return f"{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
-        except Exception:
-            pass
-        return date_str
-
-    def get_session_words(self, num_new=0, num_recap=0, old_ratio=None):
+    def get_session_words(self, num_new=0, num_recap=0, num_old=0):
         """
         Lấy từ vựng cho phiên hiện tại linh hoạt theo 3 nhóm:
         - num_new: Số từ mới toanh để học (đánh dấu date_learned = hôm nay)
         - num_recap: Số từ đã học TRONG HÔM NAY để nhắc lại (Full details)
-        - old_ratio: Tỉ lệ từ đã học CÁC NGÀY TRƯỚC đến hạn ôn tập. Dict chứa "target" (số phần) và "remaining" (tổng số phần còn lại).
+        - num_old: Số từ đã học CÁC NGÀY TRƯỚC đến hạn ôn tập (Summary)
         Nếu truyền vào None có nghĩa là lấy TOÀN BỘ danh sách có sẵn của nhóm đó.
         """
         all_vocab = self.gs.get_all_records(self.sheet_name)
         now_date = datetime.now(self.tz).strftime("%Y-%m-%d")
-
-        # Normalize dates to YYYY-MM-DD for accurate comparison
-        for w in all_vocab:
-            w["date_learned_norm"] = self._normalize_date(w.get("date_learned"))
-            w["next_review_norm"] = self._normalize_date(w.get("next_review"))
-
-        # 2. Recap Words (Từ vừa học hôm nay)
-        target_recap = []
-        if num_recap is None or num_recap > 0:
-            available_today = [w for w in all_vocab if w.get("date_learned_norm") == now_date]
-            if available_today:
-                count = len(available_today) if num_recap is None else min(num_recap, len(available_today))
-                target_recap = random.sample(available_today, count)
         
-        # 3. Old Review Words (Từ các ngày trước đến hạn)
-        target_old = []
-        due_reviews = [w for w in all_vocab if w.get("next_review_norm") and w.get("next_review_norm") <= now_date 
-                       and w.get("date_learned_norm") != now_date]
-        
-        if due_reviews:
-            if old_ratio is None:
-                # Không truyền tỉ lệ -> Lấy tất cả từ còn lại (vd: buổi tối)
-                target_old = list(due_reviews)
-            else:
-                target_parts = old_ratio.get("target", 0)
-                remaining_parts = old_ratio.get("remaining", 1)
-                
-                # Tính tổng số từ còn lại phải ôn
-                X = len(due_reviews)
-                if remaining_parts > 0:
-                    num_to_take = max(0, min(X, round(X * (target_parts / remaining_parts))))
-                    target_old = random.sample(due_reviews, num_to_take)
-                
-            for w in target_old:
-                self._update_srs(w)
-
-
-        # 1. New Words (Từ mới toanh) lấy cuối cùng
+        # 1. New Words (Từ mới toanh)
         target_new = []
         if num_new is None or num_new > 0:
             available_new = [w for w in all_vocab if not w.get("date_learned")]
@@ -88,6 +36,24 @@ class EnglishModule:
                     w["date_learned"] = now_date
                     self._update_srs(w, is_initial=True)
 
+        # 2. Recap Words (Từ vừa học hôm nay)
+        target_recap = []
+        if num_recap is None or num_recap > 0:
+            available_today = [w for w in all_vocab if w.get("date_learned") == now_date]
+            if available_today:
+                count = len(available_today) if num_recap is None else min(num_recap, len(available_today))
+                target_recap = random.sample(available_today, count)
+
+        # 3. Old Review Words (Từ các ngày trước đến hạn)
+        target_old = []
+        if num_old is None or num_old > 0:
+            due_reviews = [w for w in all_vocab if w.get("next_review") and w.get("next_review") <= now_date 
+                           and w.get("date_learned") != now_date]
+            if due_reviews:
+                count = len(due_reviews) if num_old is None else min(num_old, len(due_reviews))
+                target_old = random.sample(due_reviews, count)
+                for w in target_old:
+                    self._update_srs(w)
 
         return target_new, target_recap, target_old
 

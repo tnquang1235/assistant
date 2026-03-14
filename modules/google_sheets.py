@@ -47,6 +47,20 @@ class GoogleSheetManager:
         df_sheet = pd.DataFrame(all_records)
         headers = sheet.row_values(1)
 
+        # Tự động bổ sung cột nếu dữ liệu mới chứa các key chưa có trên sheet
+        if dict_rows:
+            new_keys = []
+            for row in dict_rows:
+                for k in row.keys():
+                    if k not in headers and k not in new_keys:
+                        new_keys.append(k)
+            
+            if new_keys:
+                headers.extend(new_keys)
+                last_col_letter = gspread.utils.rowcol_to_a1(1, len(headers))[:-1]
+                sheet.update(f"A1:{last_col_letter}1", [headers])
+                print(f"➕ Đã tự động thêm các cột mới vào sheet: {new_keys}")
+
         for new_row in dict_rows:
             if not df_sheet.empty:
                 condition = (df_sheet["date"] == new_row["date"]) & (df_sheet["symbol"] == new_row["symbol"])
@@ -62,8 +76,7 @@ class GoogleSheetManager:
             else:
                 last_record = match.iloc[-1]
                 changed = False
-                cols_to_check = ["open", "high", "low", "close", "volume"]
-                for col in cols_to_check:
+                for col in ["close", "volume"]:
                     if col in new_row and float(new_row[col]) != float(last_record.get(col, 0)):
                         changed = True
                         break

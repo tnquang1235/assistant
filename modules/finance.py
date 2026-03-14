@@ -50,7 +50,7 @@ class FinanceModule:
         "EuroStoxx50": "🇪🇺", "DAX": "🇩🇪", "CAC40": "🇫🇷", "FTSE100": "🇬🇧", "IBEX35": "🇪🇸", "FTSEMIB": "🇮🇹",
         "Nikkei225": "🇯🇵", "KOSPI": "🇰🇷", "HangSeng": "🇭🇰", "ShanghaiComp": "🇨🇳", "CSI300": "🇨🇳",
         "NIFTY50": "🇮🇳", "Sensex": "🇮🇳", "STI": "🇸🇬", "SET": "🇹🇭", "JKSE": "🇮🇩", "KLSE": "🇲🇾", "PSEi": "🇵🇭",
-        "Gold": "🥇", "Silver": "🥈", "Bitcoin": "🪙"
+        "Gold": "🥇", "Silver": "🥈", "Bitcoin": "⚡"
     }
 
 
@@ -128,16 +128,12 @@ class FinanceModule:
                 })
                 
                 # Chuẩn bị dữ liệu cập nhật Google Sheets (Dùng ngày gốc từ dữ liệu)
-                last_row = data.iloc[-1]
                 rows_to_update.append({
                     "date": base_date.strftime("%Y-%m-%d"),
                     "timestamp": now.strftime("%Y-%m-%d %H:%M"),
                     "symbol": name,
-                    "open": round(float(last_row["Open"]), 2) if "Open" in data.columns else 0,
-                    "high": round(float(last_row["High"]), 2) if "High" in data.columns else 0,
-                    "low": round(float(last_row["Low"]), 2) if "Low" in data.columns else 0,
                     "close": round(curr_p, 2),
-                    "volume": int(last_row["Volume"]) if "Volume" in data.columns else 0,
+                    "volume": int(data.iloc[-1]["Volume"]) if "Volume" in data.columns else 0,
                 })
             except Exception as e:
                 print(f"⚠️ Lỗi xử lý {name}: {e}")
@@ -159,7 +155,7 @@ class FinanceModule:
         # Tạo bảng định dạng tối ưu cho Telegram (hiển thị tốt trên nhiều nền tảng, kể cả Mobile)
         report = f"{title}\n<pre>"
         # Index: 14, Now: 8, 1D: 8, Các kỳ khác: 5-6 (Tối ưu để không bị vỡ dòng trên màn hình nhỏ)
-        report += f"{'Index':<13} {'Now':>8} {'1D':>8} {'1W':>5} {'1M':>5} {'1Q':>5} {'1Y':>5}\n"
+        report += f"{'Index':<14} {'Now':>8} {'1D':>8} {'1W':>5} {'1M':>5} {'1Q':>5} {'1Y':>6}\n"
         report += "-" * 58 + "\n"
 
         for d in display_data:
@@ -177,13 +173,13 @@ class FinanceModule:
             if emoji in ["🟡", "⚪", "🪙", "🟠", "🟢", "🔴", "🥇", "🥈", "💎", "💰", "💹", "⚡"]:
                 visual_len += 1
             
-            padding = " " * max(0, 13 - visual_len)
-            row_label = f"{name_label}{padding}"[:13]
+            padding = " " * max(0, 14 - visual_len)
+            row_label = f"{name_label}{padding}"[:14]
 
             # Định dạng Snapshot: 1D cần chi tiết (2 số thập phân), các kỳ xa hơn lấy số nguyên để gọn
             report += (f"{row_label} {d['price']:>8.1f} "
                        f"{d['c1d']:>+7.2f}% {d['c1w']:>+4.0f}% {d['c1m']:>+4.0f}% "
-                       f"{d['c1q']:>+4.0f}% {d['c1y']:>+4.0f}%\n")
+                       f"{d['c1q']:>+4.0f}% {d['c1y']:>+5.0f}%\n")
 
         """
         💡 HƯỚNG DẪN ĐỊNH DẠNG BẢNG (F-STRING FORMATTING):
