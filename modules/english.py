@@ -13,18 +13,68 @@ class EnglishModule:
         self.sheet_name = sheet_name
         self.tz = pytz.timezone(timezone)
 
+    def _parse_date(self, date_str):
+        """Parse da dinh dang ngay (YYYY-MM-DD hoặc DD/MM/YYYY)."""
+        if not date_str: return None
+        date_str = str(date_str).strip()
+        if not date_str or date_str == "DONE": return None
+        
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+            try:
+                return datetime.strptime(date_str, fmt).date()
+            except ValueError:
+                continue
+        return None
+
     def get_session_words(self, num_new=0, num_recap=0, num_old=0):
         """
-        Lấy từ vựng cho phiên hiện tại linh hoạt theo 3 nhóm:
-        - num_new: Số từ mới toanh để học (đánh dấu date_learned = hôm nay)
+        Lấy từ vựng cho phiên hiện tại linh hoạt theo 3 nhóm.
+        QUAN TRỌNG: Thứ tự lấy từ trong code phải là Recap -> Old -> New.
+        Việc này đảm bảo 'New Words' (từ vừa bốc) sẽ không bị trùng vào danh sách 'Recap' 
+        của chính phiên này.
         - num_recap: Số từ đã học TRONG HÔM NAY để nhắc lại (Full details)
         - num_old: Số từ đã học CÁC NGÀY TRƯỚC đến hạn ôn tập (Summary)
+        - num_new: Số từ mới toanh để học (đánh dấu date_learned = hôm nay)
         Nếu truyền vào None có nghĩa là lấy TOÀN BỘ danh sách có sẵn của nhóm đó.
+        Return theo thứ tự: new words, recap words, old words
+        Sử dụng _parse_date để xử lý sai lệch định dạng DD/MM/YYYY vs YYYY-MM-DD.
         """
         all_vocab = self.gs.get_all_records(self.sheet_name)
-        now_date = datetime.now(self.tz).strftime("%Y-%m-%d")
+        now_dt = datetime.now(self.tz).date()
+        now_str = now_dt.strftime("%d/%m/%Y") # Dùng định dạng của Sheet để ghi lại nếu cần
         
-        # 1. New Words (Từ mới toanh)
+        # 1. Recap Words (Từ vừa học hôm nay)
+        target_recap = []
+        if num_recap is None or num_recap > 0:
+            def is_learned_today(w):
+                d = self._parse_date(w.get("date_learned"))
+                return d == now_dt
+
+            available_today = [w for w in all_vocab if is_learned_today(w)]
+            if available_today:
+                count = len(available_today) if num_recap is None else min(num_recap, len(available_today))
+                target_recap = random.sample(available_today, count)
+
+        # 2. Old Review Words (Từ các ngày trước đến hạn)
+        target_old = []
+        if num_old is None or num_old > 0:
+            def is_due(w):
+                nr = self._parse_date(w.get("next_review"))
+                dl = self._parse_date(w.get("date_learned"))
+                if not nr: return False
+                # Den han (<= today) va khong phai vua hoc hom nay
+                return nr <= now_dt and dl != now_dt
+
+            due_reviews = [w for w in all_vocab if is_due(w)]
+            if due_reviews:
+                # BUOI TOI (num_old=None): Gioi han toi da 15 tu de tranh lag message
+                limit = 15 if num_old is None else num_old
+                count = min(limit, len(due_reviews))
+                target_old = random.sample(due_reviews, count)
+                for w in target_old:
+                    self._update_srs(w)
+
+        # 3. New Words (Từ mới toanh)
         target_new = []
         if num_new is None or num_new > 0:
             available_new = [w for w in all_vocab if not w.get("date_learned")]
@@ -32,28 +82,10 @@ class EnglishModule:
                 count = len(available_new) if num_new is None else min(num_new, len(available_new))
                 target_new = random.sample(available_new, count)
                 for w in target_new:
-                    self.gs.update_cell_by_match(self.sheet_name, "word", w["word"], "date_learned", now_date)
-                    w["date_learned"] = now_date
+                    # Ghi ngay hoc theo dinh dang hien tai cua Sheet (DD/MM/YYYY)
+                    self.gs.update_cell_by_match(self.sheet_name, "word", w["word"], "date_learned", now_str)
+                    w["date_learned"] = now_str
                     self._update_srs(w, is_initial=True)
-
-        # 2. Recap Words (Từ vừa học hôm nay)
-        target_recap = []
-        if num_recap is None or num_recap > 0:
-            available_today = [w for w in all_vocab if w.get("date_learned") == now_date]
-            if available_today:
-                count = len(available_today) if num_recap is None else min(num_recap, len(available_today))
-                target_recap = random.sample(available_today, count)
-
-        # 3. Old Review Words (Từ các ngày trước đến hạn)
-        target_old = []
-        if num_old is None or num_old > 0:
-            due_reviews = [w for w in all_vocab if w.get("next_review") and w.get("next_review") <= now_date 
-                           and w.get("date_learned") != now_date]
-            if due_reviews:
-                count = len(due_reviews) if num_old is None else min(num_old, len(due_reviews))
-                target_old = random.sample(due_reviews, count)
-                for w in target_old:
-                    self._update_srs(w)
 
         return target_new, target_recap, target_old
 
@@ -70,18 +102,16 @@ class EnglishModule:
         # Lần 4: 30 ngày sau lần ôn 3
         # Lần 5: Ngẫu nhiên trong 3 tháng sau lần ôn 4
         intervals = [1, 3, 7, 30, random.randint(60, 90)]
+        now_dt = datetime.now(self.tz)
         
         if is_initial:
-            # Lần đầu học: Lần ôn đầu tiên là 1 ngày sau
-            next_date = (datetime.now(self.tz) + timedelta(days=intervals[0])).strftime("%Y-%m-%d")
+            next_date = (now_dt + timedelta(days=intervals[0])).strftime("%d/%m/%Y")
             self.gs.update_cell_by_match(self.sheet_name, "word", word_dict["word"], "next_review", next_date)
-            # review_count lúc này là 0, sẽ được tăng lên sau mỗi buổi ôn
             self.gs.update_cell_by_match(self.sheet_name, "word", word_dict["word"], "review_count", 0)
         else:
-            # Các lần ôn tập tiếp theo
             if count < len(intervals):
                 days = intervals[count]
-                next_date = (datetime.now(self.tz) + timedelta(days=days)).strftime("%Y-%m-%d")
+                next_date = (now_dt + timedelta(days=days)).strftime("%d/%m/%Y")
                 self.gs.update_cell_by_match(self.sheet_name, "word", word_dict["word"], "next_review", next_date)
                 self.gs.update_cell_by_match(self.sheet_name, "word", word_dict["word"], "review_count", count + 1)
             else:

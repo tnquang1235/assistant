@@ -18,17 +18,17 @@ Bản tin Assistant v1.3 được thiết kế theo triết lý **"Snapshot"**: 
     *   **Bản tin Trưa/Chiều/Tối**: Top 3 tăng mạnh nhất và Top 3 giảm mạnh nhất (theo 1D).
     *   **💡 Hướng dẫn định dạng Bảng (F-String Formatting)**: 
         *   **Độ nhạy (Precision)**: 
-            *   Cột **1D**: Lấy **2 số thập phân** (`.2f`) để theo dõi sát biến động (độ nhạy cao) hàng ngày.
+            *   Cột **1D**: Lấy **2 số thập phân** (`.2f`) để cập nhật sát biến động (độ nhạy cao) hàng ngày.
             *   Các cột **1W, 1M, 1Q, 1Y**: Lấy **số nguyên** (`.0f`) để tối ưu không gian và xem nhanh xu hướng.
         *   **Cấu trúc kỹ thuật**: Sử dụng f-string `{giá_trị : [căn_lề][dấu][độ_rộng].[thập_phân][kiểu]}`. Ví dụ: `{:>+7.2f}%` cho cột 1D.
 4.  **Chứng khoán Việt Nam (VN30 & Data Warehouse)**: 
-    *   **Kho dữ liệu (Google Sheets Data Warehouse)**: Do đặc thù dữ liệu chứng khoán Việt Nam khó lấy được lịch sử quá khứ chính xác qua API miễn phí, nên cần một "Kho dữ liệu" (Data warehouse) riêng biệt, và Google Sheets được sử dụng để lưu trữ dữ liệu. Dữ liệu được cào xước từ Vietstock trực tiếp trên bảng giá, sau đó sẽ được liên tục cập nhật/ghi đè đắp dần vào Google Sheets. Tính chất tự động mở rộng cột của phần mềm này cho phép theo dõi tới hơn 27 chỉ số (Giá Trực Tiếp, Volume, Khối ngoại mua/bán, v.v.). Cuối ngày (Afternoon), phiên bản ghi này sẽ chốt thành dữ liệu chính thức của ngày hôm đó (các khung giờ buổi tối sẽ không thực hiện chạy lại dữ liệu).
+    *   **Kho dữ liệu (Google Sheets Data Warehouse)**: Do đặc thù dữ liệu chứng khoán Việt Nam khó lấy được lịch sử quá khứ chính xác qua API miễn phí, nên cần một "Kho dữ liệu" (Data warehouse) riêng biệt, và Google Sheets được sử dụng để lưu trữ dữ liệu. Dữ liệu được cào xước từ Vietstock trực tiếp trên bảng giá, sau đó sẽ được liên tục cập nhật/ghi đè đắp dần vào Google Sheets. Tính chất tự động mở rộng cột của phần mềm này cho phép cập nhật tới hơn 27 chỉ số (Giá Trực Tiếp, Volume, Khối ngoại mua/bán, v.v.). Cuối ngày (Afternoon), phiên bản ghi này sẽ chốt thành dữ liệu chính thức của ngày hôm đó (các khung giờ buổi tối sẽ không thực hiện chạy lại dữ liệu).
     *   **Bản tin Sáng (Morning)**: Tập trung vào "chuẩn bị phiên mới". Hiển thị các sự kiện (Cổ tức, Hủy niêm yết) hoặc cảnh báo từ danh sách dấu `*` hoặc `**`. Bên cạnh đó là Thống kê Dấu chân dòng tiền ngày hôm qua (khối lượng Mua Ròng / Bán Ròng từ Khối ngoại).
     *   **Bản tin Trưa & Chiều (Noon & Afternoon)**: 
         *   **Kịch biên độ**: Cảnh báo tức thời nếu mã nào chạm Trần / Sàn.
         *   **Biến động mạnh**: Liệt kê 3 mã Tăng mạnh nhất và 3 mã Giảm mạnh nhất (không trùng lặp với kịch biên độ) kèm Volume để phát hiện "kéo xả".
         *   **Top Thanh khoản**: liệt kê nhanh 3 mã có khối lượng giao dịch cao nhất trong ngày.
-        *   **Khối ngoại (Mua/Bán Ròng)**: Theo sát dòng tiền mạnh nhất đổ vào hoặc rút ra khỏi thị trường.
+        *   **Khối ngoại (Mua/Bán Ròng)**: Cập nhật dòng tiền mạnh nhất đổ vào hoặc rút ra khỏi thị trường.
 
 ---
 
@@ -50,6 +50,14 @@ Thuật toán phân tầng thời gian dựa trên mức độ ổn định củ
 2. **Trí nhớ trung hạn (Medium-term)**: Lần ôn 2 (+3 ngày) và Lần ôn 3 (+7 ngày).
 3. **Trí nhớ dài hạn (Long-term)**: Lần ôn 4 (+30 ngày).
 4. **Trí nhớ vĩnh viễn (Permanent)**: Lần ôn 5 (60-90 ngày).
+
+### Tính bền bỉ và Logic Nhắc lại chuyên sâu (Recap & Robustness)
+Assistant v1.3 cải tiến khả năng xử lý dữ liệu học tập với độ tin cậy cực cao:
+- **Recap thông minh (No Redundancy)**: Trong cùng một bản tin, hệ thống sẽ ưu tiên nạp danh sách Recap từ các buổi học *trước đó* trong cùng ngày. Những từ mới vừa bốc trong chính buổi hiện tại sẽ không bị lặp lại ở phần Recap để tiết kiệm diện tích vùng tin nhắn.
+- **Tự chữa lành dữ liệu (Self-healing Overdue)**: Nếu một từ bị "nợ" (quá hạn ôn tập) do lỗi hệ thống hoặc do người dùng bỏ lỡ, ngay khi được nhắc lại, lịch trình SRS của từ đó sẽ được tính toán lại dựa trên thời điểm hiện tại. Điều này giúp đưa từ vựng trở lại đúng chu kỳ mà không cần can thiệp thủ công vào cơ sở dữ liệu.
+- **Cơ chế bỏ qua từ vựng (Skip Empty Reviews)**: Nếu cột `next_review` bị để trống trên Google Sheets, hệ thống sẽ coi đó là từ không cần ôn tập và hoàn toàn bỏ qua, giúp người dùng linh hoạt quản lý danh mục từ vựng "Mastered" hoặc "Ignored".
+- **Xử lý đa định dạng ngày (Flexible Date Parsing)**: Hệ thống tự động nhận diện và chuyển đổi linh hoạt giữa các định dạng ngày `DD/MM/YYYY`, `YYYY-MM-DD` hoặc `DD-MM-YYYY`. Ngoài ra, cơ chế `.strip()` được áp dụng triệt để để loại bỏ các khoảng trắng thừa do lỗi nhập liệu của người dùng.
+- **Kiểm thử tự động (Quality Assurance)**: Dự án tích hợp các bộ công cụ kiểm thử như `test_english_recap.py`, `diagnostic_english.py` và `test_telegram_english.py` để đảm bảo logic luôn chạy đúng trước khi gửi tin thực tế.
 
 ---
 
@@ -113,6 +121,28 @@ Bằng việc tách chứng khoán Việt Nam ra thành môi trường Data Ware
 
 ### Chiến thuật Cơ cấu / Tái lập danh mục
 - Xây dựng file config `portfolio.json`. System sẽ check Google Sheets: Nếu mã trong danh mục giảm quá 7% (Hit Stoploss), ngay lập tức gửi cảnh báo khẩn cấp tới Telegram bất chấp giờ giao dịch.
+
+---
+
+### Cơ chế Chịu lỗi & Tối ưu hóa API (Smart Resilience)
+Nhằm đối phó với hạn mức (Quota) nghiêm ngặt của Google Sheets API (60 requests/phút), Assistant v1.3 triển khai 4 lớp bảo mật dữ liệu:
+
+1.  **Ghi đè theo khối (Block Overwrite)**: Thay vì cập nhật từng dòng cổ phiếu (30 lần API call), hệ thống sẽ tính toán dải hàng (Range) từ hàng đầu tiên đến hàng cuối cùng có sự thay đổi. Toàn bộ khối dữ liệu này được ghi đè trong **duy nhất 01 lần gọi API**. Hệ thống đã được hiệu chỉnh để tự động ép kiểu dữ liệu (`object casting`), tránh lỗi xung đột giữa số nguyên (int64) và số thập phân (gold prices/indices).
+2.  **Tự động xếp hàng & Thử lại (Auto-Retry)**: Khi gặp lỗi `429 (Quota Exceeded)`, hệ thống sẽ tự động tạm dừng 65 giây để reset quota, sau đó tự động thực hiện lại lệnh ghi (tối đa 2 lần).
+3.  **Thông báo sự cố qua Telegram**: Mọi trạng thái "đang xếp hàng chờ API" hoặc lỗi ghi nghiêm trọng đều được gửi trực tiếp tới Telegram của người dùng để kịp thời nắm bắt trạng thái của Data Warehouse.
+4.  **Thứ tự ưu tiên Tài sản (Asset Priority)**: Logic thực thi theo thứ tự: **Tiếng Anh (Quan trọng nhất)** -> Thời tiết -> Tài chính. Dữ liệu giáo dục luôn được đảm bảo an toàn nếu hạn mức API cạn kiệt ở cuối ca.
+
+---
+
+## 6. 🔌 Tương thích Phần cứng & Đa nền tảng (Hardware Efficiency)
+Assistant v1.3 được tối ưu đặc biệt để chạy bền bỉ 24/7 trên các hệ thống tài nguyên thấp:
+
+- **Hỗ trợ Headless/Raspberry Pi**: 
+    - Toàn bộ các thư viện GUI (pymsgbox, tkinter) được chuyển sang cơ chế **Nạp chậm (Lazy Import)** và bọc trong khối xử lý lỗi. Điều này giúp Bot khởi động mượt mà trên môi trường Linux Server/Docker/Raspberry Pi mà không bị treo do thiếu trình quản lý cửa sổ.
+    - Tự động phát hiện OS để chọn đường dẫn ChromeDriver phù hợp (`/usr/bin/chromedriver` trên Linux hoặc file `.exe` trên Windows).
+- **Tối ưu hóa Tài nguyên**: 
+    - Sử dụng bộ lọc dữ liệu thông minh để chỉ cập nhật Google Sheets khi có biến động giá thực sự, giúp giảm tải CPU và băng thông mạng.
+    - Các lệnh `print` được loại bỏ Emoji (Unicode Clean-up) để tương thích tuyệt đối với Windows Terminal mặc định, tránh lỗi `UnicodeEncodeError`.
 
 ---
 

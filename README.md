@@ -4,7 +4,7 @@
 ---
 
 ## 🚀 Tổng Quan Dự Án
-**Assistant** là hệ thống trợ lý cá nhân tự động hóa, hoạt động 24/7 như một dịch vụ chạy ngầm. Hệ thống chuyên nghiệp hóa việc theo dõi thông tin, học tập và quản lý tài chính cá nhân thông qua tin nhắn Telegram, giúp triển khai trên đa nền tảng.
+**Assistant** là hệ thống trợ lý cá nhân tự động hóa, hoạt động 24/7 như một dịch vụ chạy ngầm. Hệ thống chuyên nghiệp hóa việc cập nhật thông tin, học tập và quản lý tài chính cá nhân thông qua tin nhắn Telegram, giúp triển khai trên đa nền tảng.
 
 Hệ thống sử dụng triết lý **"Snapshot"**: Cung cấp thông tin cô đọng, nhanh gọn, tối ưu hoàn hảo cho trải nghiệm di động.
 
@@ -16,7 +16,7 @@ Dự án hiện nay đã được triển khai đến đến phiên bản 1.3
 
 ### 🌦️ 1. Weather Snapshot
 *   **Nguồn dữ liệu:** OpenWeatherMap API.
-*   **Phạm vi:** Theo dõi cùng lúc nhiều địa điểm (Hồ Chí Minh, Cần Thơ, ...).
+*   **Phạm vi:** Cập nhật cùng lúc nhiều địa điểm (Hồ Chí Minh, Cần Thơ, ...).
 *   **Số liệu:** Nhiệt độ thực tế, Cảm giác như (Feels like), Độ ẩm, Tầm nhìn và Trạng thái thời tiết.
 
 ### 🧠 2. Smart English Learning (SRS)

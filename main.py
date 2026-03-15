@@ -16,9 +16,9 @@ from modules.vn_finance import VNFinanceModule
 bot = TelegramNotifier(settings.BOT_TOKEN, settings.CHAT_ID)
 
 # Separate managers for each module
-gs_fin = GoogleSheetManager(settings.GOOGLE_CREDENTIAL_FILE, settings.FINANCE_SHEET_ID)
-gs_weather = GoogleSheetManager(settings.GOOGLE_CREDENTIAL_FILE, settings.WEATHER_SHEET_ID)
-gs_eng = GoogleSheetManager(settings.GOOGLE_CREDENTIAL_FILE, settings.ENGLISH_SHEET_ID)
+gs_fin = GoogleSheetManager(settings.GOOGLE_CREDENTIAL_FILE, settings.FINANCE_SHEET_ID, notifier=bot)
+gs_weather = GoogleSheetManager(settings.GOOGLE_CREDENTIAL_FILE, settings.WEATHER_SHEET_ID, notifier=bot)
+gs_eng = GoogleSheetManager(settings.GOOGLE_CREDENTIAL_FILE, settings.ENGLISH_SHEET_ID, notifier=bot)
 
 vn_sheet_id = getattr(settings, 'VN_FINANCE_SHEET_ID', None)
 if not vn_sheet_id:
@@ -29,7 +29,7 @@ if not vn_sheet_id:
     gs_vn = MockGS()
 else:
     try:
-        gs_vn = GoogleSheetManager(settings.GOOGLE_CREDENTIAL_FILE, vn_sheet_id)
+        gs_vn = GoogleSheetManager(settings.GOOGLE_CREDENTIAL_FILE, vn_sheet_id, notifier=bot)
     except Exception as e:
         print(f"[WARN] Failed to connect VN_FINANCE_SHEET_ID: {e}")
         class MockGS:
