@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 from typing import Optional, List, Any
 
-import pymsgbox
+# import pymsgbox (Chuyển sang nạp chậm để hỗ trợ Headless/Linux)
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -310,15 +310,19 @@ class ChromeController:
         for c in ["chromedriver", "chromedriver.exe"]:
             if os.path.exists(c): return os.path.abspath(c)
         
-        logger.info("Yêu cầu chọn chromedriver qua dialog...")
-        path = pymsgbox.prompt("Nhập đường dẫn chromedriver:")
-        if path and os.path.exists(path): return path
+        logger.info("Yêu cầu chọn chromedriver qua dialog (chỉ hỗ trợ Windows/Desktop)...")
+        try:
+            import pymsgbox
+            path = pymsgbox.prompt("Nhập đường dẫn chromedriver:")
+            if path and os.path.exists(path): return path
+            
+            from tkinter.filedialog import askopenfilename
+            selected = askopenfilename(title='Select Chrome Driver', filetypes=[("exe", "*.exe"), ("all", "*")])
+            if selected: return selected
+        except Exception as e:
+            logger.warning(f"Không thể mở giao diện chọn file (có thể do môi trường Headless/Linux): {e}")
         
-        from tkinter.filedialog import askopenfilename
-        selected = askopenfilename(title='Select Chrome Driver', filetypes=[("exe", "*.exe"), ("all", "*")])
-        if selected: return selected
-        
-        raise FileNotFoundError("Không tìm thấy Chromedriver.")
+        raise FileNotFoundError(f"Không tìm thấy Chromedriver tại: {self.driver_path}. Vui lòng kiểm tra lại cấu hình.")
 
     def _build_options(self) -> Options:
         opts = Options()
