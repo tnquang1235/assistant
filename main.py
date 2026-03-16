@@ -53,52 +53,99 @@ ENGLISH_CONFIG = {
     "Evening":   {"new": 0, "recap": None, "old": None}
 }
 
-# ================= TASKS =================
+# ================= TASKS (ATOMIC FUNCTIONS) =================
 
-def send_bulletin(session_name, is_first_run=False):
-    """Orchestrates the bulletin in the requested order."""
-    print(f"🔔 Running {session_name} Bulletin...")
-    
-    # 1. Lời chào & Thông tin thời tiết
-    greeting = "🌅 Chào buổi sáng!" if session_name == "Morning" else \
-               "🕛 Chào buổi trưa!" if session_name == "Noon" else \
-               "🕓 Chào buổi chiều!" if session_name == "Afternoon" else "🌙 Chúc buổi tối tốt lành!"
+def task_greeting_weather():
+    """Tự động chọn lời chào theo thời gian và gửi báo cáo thời tiết."""
+    hour = datetime.now().hour
+    if 5 <= hour < 11:
+        greeting = "🌅 Chào buổi sáng!"
+    elif 11 <= hour < 14:
+        greeting = "🕛 Chào buổi trưa!"
+    elif 14 <= hour < 18:
+        greeting = "🕓 Chào buổi chiều!"
+    else:
+        greeting = "🌙 Chúc buổi tối tốt lành!"
+        
     bot.send(f"{greeting}\n\n" + weather.get_report())
 
-    # 2. Từ vựng tiếng Anh
-    if not (session_name == "Morning" and is_first_run):
-        conf = ENGLISH_CONFIG.get(session_name, {"new": 0, "recap": 0, "old": 0})
-        new_w, recap_w, old_w = eng.get_session_words(
-            num_new=conf.get("new", 0), 
-            num_recap=conf.get("recap", 0), 
-            num_old=conf.get("old", 0)
-        )
-        title = f"HỌC TIẾNG ANH ({session_name})"
-        bot.send(eng.format_bulletin(title, new_w, recap_w, old_w))
+def task_english_vocab(session_name, config):
+    """Xử lý và gửi bài học tiếng Anh theo cấu hình."""
+    """Cấu hình phân bổ từ vựng mỗi phiên tại ENGLISH_CONFIG"""
+    new_w, recap_w, old_w = eng.get_session_words(
+        num_new=config.get("new", 0), 
+        num_recap=config.get("recap", 0), 
+        num_old=config.get("old", 0)
+    )
+    title = f"HỌC TIẾNG ANH ({session_name})"
+    bot.send(eng.format_bulletin(title, new_w, recap_w, old_w))
 
-    # 3. Thị trường thế giới
-    mode = "full" if session_name == "Morning" else "highlights"
+def task_market_world(mode="highlights"):
+    """Gửi báo cáo thị trường tài chính thế giới."""
     bot.send(fin.get_report(mode=mode))
 
-    # 4. Chứng khoán Việt Nam
-    bot.send(vn_fin.get_report(session=session_name))
+def task_market_vn(session_name, goodbye=None):
+    """Gửi báo cáo chứng khoán Việt Nam và lời chào kết thúc nếu có."""
+    report = vn_fin.get_report(session=session_name)
+    if goodbye:
+        report += f"\n\n{goodbye}"
+    bot.send(report)
+
+# ================= SESSION JOBS =================
 
 def morning_job(is_first_run=False):
-    send_bulletin("Morning", is_first_run)
+    """Bản tin tổng hợp đầu ngày (Global Snapshot)."""
+    print(f"🔔 Running Global Snapshot Bulletin...")
+    # 1. Chào hỏi & Thời tiết (Tự động)
+    task_greeting_weather()
+    # 2. Tiếng Anh (Giữ nguyên tên 'Morning' để không đổi bản tin)
+    if not is_first_run:
+        eng_conf = ENGLISH_CONFIG.get("Morning")
+        task_english_vocab("Morning", eng_conf)
+    # 3. Tài chính thế giới (Full report vào buổi sáng)
+    task_market_world(mode="full")
+    # 4. Chứng khoán VN -> Bỏ ra khỏi bản tin 6h sáng theo yêu cầu
+
+def vn_market_watch_job(session_name):
+    """Bản tin cập nhật chứng khoán VN."""
+    print(f"🔔 Running {session_name}...")
+    task_market_vn(session_name)
 
 def noon_job():
-    send_bulletin("Noon")
+    """Điểm tin giữa ngày."""
+    print(f"🔔 Running Mid-day Recap...")
+    
+    task_greeting_weather()
+    # Tiếng Anh giữ nguyên tên 'Noon'
+    task_english_vocab("Noon", ENGLISH_CONFIG.get("Noon"))
+    task_market_world(mode="highlights")
+    task_market_vn("MID_DAY_RECAP")
 
 def afternoon_job():
-    send_bulletin("Afternoon")
+    """Tổng kết phiên giao dịch."""
+    print(f"🔔 Running Market Closing Summary...")
+    
+    task_greeting_weather()
+    # Tiếng Anh giữ nguyên tên 'Afternoon'
+    task_english_vocab("Afternoon", ENGLISH_CONFIG.get("Afternoon"))
+    task_market_world(mode="highlights")
+    task_market_vn("MARKET_CLOSE_SUMMARY")
 
 def evening_job():
-    send_bulletin("Evening")
-    bot.send("🌙 Good night!")
+    """Đánh giá cuối ngày."""
+    print(f"🔔 Running Day-end Review...")
+    
+    task_greeting_weather()
+    # Tiếng Anh giữ nguyên tên 'Evening'
+    task_english_vocab("Evening", ENGLISH_CONFIG.get("Evening"))
+    task_market_world(mode="highlights")
+    task_market_vn("DAY_END_REVIEW", goodbye="🌙 Good night!")
 
 # ================= SCHEDULING =================
 
 schedule.every().day.at("06:00").do(morning_job)
+schedule.every().day.at("08:00").do(vn_market_watch_job, session_name="MARKET_OPENING")
+schedule.every().day.at("10:00").do(vn_market_watch_job, session_name="MARKET_WATCH")
 schedule.every().day.at("12:00").do(noon_job)
 schedule.every().day.at("16:00").do(afternoon_job)
 schedule.every().day.at("22:00").do(evening_job)

@@ -32,7 +32,28 @@ Bản tin Assistant v1.3 được thiết kế theo triết lý **"Snapshot"**: 
 
 ---
 
-## 2. 🧠 Thuật toán Spaced Repetition (SRS)
+## 2. 🏗️ Triết lý Thiết kế Job (Job Architecture Philosophy)
+Để đảm bảo tính linh hoạt nhưng vẫn duy trì thói quen học tập bền bỉ, Assistant v1.3 phân chia hệ thống Job thành 2 nhóm chính:
+
+### A. Nhóm Job Cố định (Fixed Sessions)
+*   **Thời gian**: Chạy vào 4 khung giờ vàng (06:00, 12:00, 16:00, 22:00).
+*   **Tên gọi**: Được đặt định danh theo buổi (`Morning`, `Noon`, `Afternoon`, `Evening`).
+*   **Đặc tính**:
+    *   **Tính ổn định**: Tập trung vào việc xây dựng thói quen dài hạn cho người học.
+    *   **Nội dung**: Bao gồm đầy đủ các Task (Chào hỏi, Thời tiết, Tiếng Anh, Tài chính).
+    *   **Ràng buộc**: Task học Tiếng Anh bắt buộc gắn liền với tên buổi để khớp với cấu trúc `ENGLISH_CONFIG`, giúp người học nhận diện bài học theo nhịp sinh học hàng ngày.
+
+### B. Nhóm Job Xen kẽ/Nhanh (Flexible Market Updates)
+*   **Thời gian**: Linh động dựa trên diễn biến thị trường (ví dụ: 08:00, 10:00, hoặc các giờ cao điểm giao dịch).
+*   **Tên gọi**: Đặt theo bản chất nội dung báo cáo (ví dụ: `MARKET_OPENING`, `MARKET_WATCH`, `PRE_MARKET`).
+*   **Đặc tính**:
+    *   **Tính linh hoạt**: Không ràng buộc vào tên buổi, cho phép người dùng tùy chỉnh báo cáo (Full/Highlights) và thời gian nhận tin bất cứ lúc nào.
+    *   **Nội dung**: Thường chỉ tập trung vào các thị trường biến động mạnh (VN-Index, Crypto, v.v.).
+    *   **Khai báo biến**: Sử dụng các biến tạp, biến trung gian độc lập để điều phối dữ liệu mà không làm ảnh hưởng đến cấu trúc học tập của các Session cố định.
+
+---
+
+## 3. 🧠 Thuật toán Spaced Repetition (SRS)
 Hệ thống sử dụng thuật toán Lặp lại ngắt quãng dựa trên **Đường cong quên lãng của Ebbinghaus**.
 
 ### Bản chất của Đường cong quên lãng

@@ -50,7 +50,7 @@ class FinanceModule:
         "EuroStoxx50": "🇪🇺", "DAX": "🇩🇪", "CAC40": "🇫🇷", "FTSE100": "🇬🇧", "IBEX35": "🇪🇸", "FTSEMIB": "🇮🇹",
         "Nikkei225": "🇯🇵", "KOSPI": "🇰🇷", "HangSeng": "🇭🇰", "ShanghaiComp": "🇨🇳", "CSI300": "🇨🇳",
         "NIFTY50": "🇮🇳", "Sensex": "🇮🇳", "STI": "🇸🇬", "SET": "🇹🇭", "JKSE": "🇮🇩", "KLSE": "🇲🇾", "PSEi": "🇵🇭",
-        "Gold": "🥇", "Silver": "🥈", "Bitcoin": "⚡"
+        "Gold": "🥇", "Silver": "🥈", "Bitcoin": "🪙"
     }
 
 
@@ -155,8 +155,8 @@ class FinanceModule:
         # Tạo bảng định dạng tối ưu cho Telegram (hiển thị tốt trên nhiều nền tảng, kể cả Mobile)
         report = f"{title}\n<pre>"
         # Index: 14, Now: 8, 1D: 8, Các kỳ khác: 5-6 (Tối ưu để không bị vỡ dòng trên màn hình nhỏ)
-        report += f"{'Index':<14} {'Now':>8} {'1D':>8} {'1W':>5} {'1M':>5} {'1Q':>5} {'1Y':>6}\n"
-        report += "-" * 58 + "\n"
+        report += f"{'Index':<14} {'Now':>8} {'1D':>8} {'1W':>5} {'1M':>5} {'1Q':>5} {'1Y':>5}\n"
+        report += "-" * 55 + "\n"
 
         for d in display_data:
             emoji = self.FIN_EMOJIS.get(d['name'], "🔹")
@@ -179,7 +179,7 @@ class FinanceModule:
             # Định dạng Snapshot: 1D cần chi tiết (2 số thập phân), các kỳ xa hơn lấy số nguyên để gọn
             report += (f"{row_label} {d['price']:>8.1f} "
                        f"{d['c1d']:>+7.2f}% {d['c1w']:>+4.0f}% {d['c1m']:>+4.0f}% "
-                       f"{d['c1q']:>+4.0f}% {d['c1y']:>+5.0f}%\n")
+                       f"{d['c1q']:>+4.0f}% {d['c1y']:>+4.0f}%\n")
 
         """
         💡 HƯỚNG DẪN ĐỊNH DẠNG BẢNG (F-STRING FORMATTING):

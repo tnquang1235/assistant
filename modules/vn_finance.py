@@ -202,8 +202,8 @@ class VNFinanceModule:
         finally:
             browser.close()
 
-    def get_report(self, session="Morning"):
-        """Tạo báo cáo VN-Index phân biệt theo buổi (Morning, Noon, Afternoon)."""
+    def get_report(self, session="MARKET_INTRADAY"):
+        """Tạo báo cáo VN-Index dựa theo bản chất của bản tin (Opening vs Trading)."""
         vn30_stocks = self._scrape_vn30_data()
         
         # Lưu vào Google Sheet (Lưu liên tục nhưng lần chạy Afternoon sẽ là số liệu chốt ngày)
@@ -227,7 +227,10 @@ class VNFinanceModule:
             vol = s.get('TotalVol', '')
             s['TotalVol'] = float(vol) if vol != "" else 0
 
-        if session == "Morning":
+        # Phân loại logic theo bản chất bản tin
+        is_opening = any(kw in session.upper() for kw in ["OPENING", "PRE_MARKET", "MORNING"])
+        
+        if is_opening:
             # 1. Sự kiện / Cảnh báo
             events = [s for s in vn30_stocks if s.get('Note') in ['event', 'warning']]
             if events:
