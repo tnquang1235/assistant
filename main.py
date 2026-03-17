@@ -58,12 +58,14 @@ ENGLISH_CONFIG = {
 def task_greeting_weather():
     """Tự động chọn lời chào theo thời gian và gửi báo cáo thời tiết."""
     hour = datetime.now().hour
-    if 5 <= hour < 11:
-        greeting = "🌅 Chào buổi sáng!"
+    if 0 <= hour < 6:
+        greeting = "⭐ Chào ngày mới!"
+    elif 6 <= hour < 11:
+        greeting = "☀️ Chào buổi sáng!"
     elif 11 <= hour < 14:
-        greeting = "🕛 Chào buổi trưa!"
+        greeting = "🌤️ Chào buổi trưa!"
     elif 14 <= hour < 18:
-        greeting = "🕓 Chào buổi chiều!"
+        greeting = "⛅ Chào buổi chiều!"
     else:
         greeting = "🌙 Chúc buổi tối tốt lành!"
         

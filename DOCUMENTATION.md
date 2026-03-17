@@ -4,7 +4,7 @@ Assistant v1.3 là hệ thống trợ lý cá nhân tự động gửi bản tin
 
 ---
 
-## 1. Cấu trúc bản tin (Thứ tự gửi mỗi lần)
+## 1. 💡 Cấu trúc bản tin (Thứ tự gửi mỗi lần)
 Bản tin Assistant v1.3 được thiết kế theo triết lý **"Snapshot"**: hiển thị thông tin nhanh, gọn, chuyên nghiệp và tối ưu cho nhiều nền tảng, đặc biệt là Mobile (Telegram).
 
 1.  **Lời chào & Thông tin thời tiết**: Lời chào và thông tin thời tiết 2 Thành phố là Cần Thơ và Hồ Chí Minh, Thông tin thời tiết Hiển thị dạng bảng (Thành phố, Nhiệt độ hiện tại, Cao/Thấp, Độ ẩm, Trạng thái).
