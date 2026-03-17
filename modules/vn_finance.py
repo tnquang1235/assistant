@@ -202,6 +202,17 @@ class VNFinanceModule:
         finally:
             browser.close()
 
+    def _format_vol(self, vol):
+        """Format khối lượng giao dịch linh hoạt (cp, K, Tr), giới hạn 3 chữ số trước thập phân."""
+        if not vol: return "0 cp"
+        
+        if vol >= 999500: # Ngưỡng để 999.5K+ làm tròn thành 1.0Tr
+            return f"{vol/1000000:.1f}Tr cp"
+        elif vol >= 1000:
+            return f"{vol/1000:.1f}K cp"
+        else:
+            return f"{vol:,.0f} cp"
+
     def get_report(self, session="MARKET_INTRADAY"):
         """Tạo báo cáo VN-Index dựa theo bản chất của bản tin (Opening vs Trading)."""
         vn30_stocks = self._scrape_vn30_data()
@@ -274,11 +285,11 @@ class VNFinanceModule:
             if ceilings or floors:
                 report += "\n🚀 <b>Chạm Biên Độ:</b>\n<pre>"
                 for s in ceilings:
-                    vol_m = s['TotalVol'] / 1000000 if s['TotalVol'] else 0
-                    report += f"- {s['symbol']:<5}: {s['MatchPrice']} (Trần) | Vol: {vol_m:.1f}M\n"
+                    vol_str = self._format_vol(s['TotalVol'])
+                    report += f"- {s['symbol']:<5}: {s['MatchPrice']} (Trần) | Vol: {vol_str}\n"
                 for s in floors:
-                    vol_m = s['TotalVol'] / 1000000 if s['TotalVol'] else 0
-                    report += f"- {s['symbol']:<5}: {s['MatchPrice']} (Sàn)  | Vol: {vol_m:.1f}M\n"
+                    vol_str = self._format_vol(s['TotalVol'])
+                    report += f"- {s['symbol']:<5}: {s['MatchPrice']} (Sàn)  | Vol: {vol_str}\n"
                 report += "</pre>"
             
             exclude_symbols = set([s['symbol'] for s in ceilings + floors])
@@ -313,8 +324,8 @@ class VNFinanceModule:
             if sorted_vol:
                 report += "\n🌊 <b>Top Thanh Khoản (Khối lượng):</b>\n<pre>"
                 for s in sorted_vol:
-                    vol_m = s['TotalVol'] / 1000000 if s['TotalVol'] else 0
-                    report += f"- {s['symbol']:<5}: {vol_m:>4.1f}Tr cp ({s['change_pct']:>+4.1f}%)\n"
+                    vol_str = self._format_vol(s['TotalVol'])
+                    report += f"- {s['symbol']:<5}: {vol_str:>10} ({s['change_pct']:>+4.1f}%)\n"
                 report += "</pre>"
                 
             # 4. Khối ngoại (Top 3 Mua/Bán Ròng)
