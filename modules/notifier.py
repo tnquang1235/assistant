@@ -22,3 +22,21 @@ class TelegramNotifier:
                 print(f"❌ Telegram Error: {response.text}")
         except Exception as e:
             print(f"❌ Telegram Connection Error: {e}")
+
+    def send_photo(self, photo_path, caption=None):
+        """Gửi ảnh qua Telegram."""
+        url = f"https://api.telegram.org/bot{self.bot_token}/sendPhoto"
+        try:
+            with open(photo_path, 'rb') as photo:
+                files = {'photo': photo}
+                payload = {'chat_id': self.chat_id}
+                if caption:
+                    payload['caption'] = caption
+                    payload['parse_mode'] = 'HTML'
+                response = requests.post(url, data=payload, files=files)
+                if response.status_code != 200:
+                    print(f"❌ Telegram Photo Error: {response.text}")
+                else:
+                    print(f"✅ Đã gửi ảnh lỗi qua Telegram: {photo_path}")
+        except Exception as e:
+            print(f"❌ Telegram Photo Connection Error: {e}")

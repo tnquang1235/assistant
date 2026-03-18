@@ -6,7 +6,7 @@
 
 > **SCC** là một lớp điều khiển (abstraction layer) tối ưu hóa Selenium, tập trung vào tính đơn giản, độ ổn định, và khả năng mở rộng trong các dự án tự động hóa trình duyệt.
 
-**Phiên bản:** `2.1.0` | **Cập nhật:** `2026-03-03` | **Trạng thái:** Active
+**Phiên bản:** `2.1.1` | **Cập nhật:** `2026-03-18` | **Trạng thái:** Active
 
 ---
 
@@ -22,6 +22,7 @@
 - [🛠 Xử lý sự cố](#-xử-lý-sự-cố-troubleshooting)
 - [🤝 Đóng góp](#-đóng-góp-contributing)
 - [📜 Giấy phép](#-giấy-phép-license)
+- [🚀 Nhật ký Nâng cấp (Changelog)](#-nhật-ký-nâng-cấp-changelog)
 
 ---
 
@@ -87,7 +88,7 @@ scc/                    # Thư mục gói (Package)
 *   **🛡️ Click-Force**: Tự động fallback sang JavaScript click khi Selenium click không thực thi được.
 *   **📑 Tab Management**: Hỗ trợ quản lý nhiều tab bằng `name`.
 *   **📥 Downloads tracking**: Tự động theo dõi tiến trình tải file qua `chrome://downloads`.
-*   **📸 Error Capture**: Chụp ảnh màn hình tự động vào thư mục `/logs` khi gặp lỗi.
+*   **📸 Error & Screenshot Capture**: Chụp ảnh màn hình tự động vào thư mục `/logs` khi gặp lỗi. Đặc biệt, phương thức `capture_error()` giờ đây trả về đường dẫn file (`str`) để dễ dàng tích hợp với các hệ thống thông báo (như Telegram/Email).
 *   **🧩 Anti-Detection**: Tích hợp cấu hình giả lập người dùng, bypass các hệ thống phát hiện bot cơ bản.
 
 ---
@@ -166,5 +167,17 @@ Mọi đóng góp nhằm cải thiện SCC đều được chào đón:
 
 Phân phối dưới Giấy phép MIT. Xem `LICENSE` để biết thêm thông tin.
 
+---
+ 
+## 🚀 Nhật ký Nâng cấp (Changelog)
+ 
+### v2.1.1 (2026-03-18)
+- **Feature (Critical)**: Nâng cấp phương thức `capture_error`. Hàm này hiện trả về đường dẫn file (`str`) của ảnh chụp màn hình thay vì chỉ thực thi ngầm. Việc này hỗ trợ tích hợp gửi ảnh báo lỗi trực quan qua các kênh thông báo ngoại vi (Telegram, Slack, Email).
+- **Maintenance**: Cập nhật cơ chế lưu trữ tập trung vào thư mục `logs/screenshots`.
+ 
+### v2.1.0 (2026-03-03)
+- **Feature**: Tách biệt hoàn toàn `ChromeController` sang module độc lập.
+- **Improvement**: Hỗ trợ headless mode tối ưu cho Linux/Docker.
+ 
 ---
 *Phát triển bởi 🌱 **Quang Amateur** ✨, hỗ trợ bởi trợ lý AI 🤖. Hướng tới sự chuyên nghiệp và tin cậy.*

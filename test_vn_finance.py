@@ -36,7 +36,7 @@ else:
                 print(f"[DEBUG] MockGS (Fallback): {len(data)} records processed.")
         gs_vn = MockGS()
 
-vn_fin = VNFinanceModule(gs_vn)
+vn_fin = VNFinanceModule(gs_vn, notifier=bot)
 
 def test_vn_finance_job():
     """

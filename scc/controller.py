@@ -297,8 +297,8 @@ class ChromeController:
     # 9. Debug & Utilities
     # ---------------------------------------------------------
 
-    def capture_error(self, prefix: str = "error"):
-        self._save_screenshot(prefix)
+    def capture_error(self, prefix: str = "error") -> Optional[str]:
+        return self._save_screenshot(prefix)
 
     # ---------------------------------------------------------
     # 10. Internal Helpers
@@ -345,17 +345,22 @@ class ChromeController:
         opts.add_experimental_option('useAutomationExtension', False)
         return opts
 
-    def _save_screenshot(self, prefix: str):
+    def _save_screenshot(self, prefix: str) -> Optional[str]:
         if not self.browser or not self.screenshot_dir:
-            return
+            return None
         try:
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             fp = os.path.join(str(self.screenshot_dir), f"{prefix}_{ts}.png")
             if self.browser:
+                # Tạo thêm snapshot page source để debug sâu hơn nếu cần (Tuỳ chọn)
+                # with open(f"logs/{prefix}_{ts}.html", "w", encoding="utf-8") as f:
+                #     f.write(self.browser.page_source)
                 self.browser.save_screenshot(fp)
                 logger.info(f"Screenshot saved: {fp}")
+                return fp
         except Exception as e:
             logger.error(f"Screenshot error: {e}")
+        return None
 
     def _find_presence(self, xpath: str, timeout: float) -> Optional[Any]:
         if not self.browser: return None

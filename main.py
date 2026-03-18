@@ -40,7 +40,7 @@ else:
 fin = FinanceModule(gs_fin, sheet_name=settings.FINANCE_SHEET_NAME)
 weather = WeatherModule(settings.WEATHER_API_KEY, gs_weather, sheet_name=settings.WEATHER_SHEET_NAME)
 eng = EnglishModule(gs_eng, sheet_name=settings.ENGLISH_SHEET_NAME)
-vn_fin = VNFinanceModule(gs_vn)
+vn_fin = VNFinanceModule(gs_vn, notifier=bot)
 
 # Configuration for vocabulary distribution (Flexible counts per session)
 # Cấu hình phân bổ từ vựng (Số lượng linh hoạt cho mỗi buổi)

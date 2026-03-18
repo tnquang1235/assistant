@@ -13,8 +13,9 @@ class VNFinanceModule:
     URL_VN30 = "https://banggia.vietstock.vn/bang-gia/vn30"
     URL_MARKET = "https://banggia.vietstock.vn/"
 
-    def __init__(self, google_manager, chromedriver_path="./chromedriver.exe"):
+    def __init__(self, google_manager, notifier=None, chromedriver_path="./chromedriver.exe"):
         self.gs = google_manager
+        self.notifier = notifier
         self.chromedriver_path = chromedriver_path
 
     def _scrape_vn30_data(self):
@@ -46,6 +47,9 @@ class VNFinanceModule:
             raw_element = browser.get_xpath('//*[@id="price-board-body"]')
             if not raw_element:
                 print("❌ Không tìm thấy bảng giá VN30.")
+                shot = browser.capture_error("vn30_not_found")
+                if self.notifier and shot:
+                    self.notifier.send_photo(shot, caption="❌ <b>Lỗi Scraping VN30</b>\nKhông tìm thấy bảng giá Vietstock.")
                 return []
                 
             raw_text = raw_element.text
@@ -197,7 +201,10 @@ class VNFinanceModule:
                 })
             
             return res
-        except:
+        except Exception as e:
+            shot = browser.capture_error("indices_summary_err")
+            if self.notifier and shot:
+                self.notifier.send_photo(shot, caption=f"❌ <b>Lỗi Scraping Indices</b>\nChi tiết: {str(e)}")
             return [] # Mock hoặc bỏ qua nếu selector sai
         finally:
             browser.close()
