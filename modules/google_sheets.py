@@ -28,19 +28,19 @@ class GoogleSheetManager:
             except APIError as e:
                 if "429" in str(e) and attempt < max_retries:
                     wait_time = 65 # Chờ hơn 1 phút để reset quota
-                    msg = f"⚠️ Google API Quota Exceeded. Đang chờ {wait_time}s để thử lại (Lần {attempt+1}/{max_retries})..."
+                    msg = f"[WARN] Google API Quota Exceeded. Waiting {wait_time}s to retry (Attempt {attempt+1}/{max_retries})..."
                     print(msg)
                     if self.notifier and attempt == 0:
-                        self.notifier.send("📉 Google Sheets API bận. Hệ thống đang tự động xếp hàng và chờ ghi dữ liệu...")
+                        self.notifier.send("Google Sheets API Busy. System is waiting to retry...")
                     time.sleep(wait_time)
                 else:
-                    err_msg = f"❌ Lỗi ghi Google Sheet: {e}"
+                    err_msg = f"[ERROR] Google Sheet Error: {e}"
                     print(err_msg)
                     if self.notifier:
-                        self.notifier.send(f"🚨 Cảnh báo: Không thể cập nhật Google Sheets.\nLỗi: {str(e)[:100]}...\nVui lòng kiểm tra thủ công.")
+                        self.notifier.send(f"Warning: Cannot update Google Sheets.\nError: {str(e)[:100]}...\nPlease check manually.")
                     return None
             except Exception as e:
-                print(f"❌ Lỗi hệ thống khi gọi Sheets: {e}")
+                print(f"[ERROR] System error during Sheets call: {e}")
                 return None
 
     def _connect(self):
@@ -49,7 +49,7 @@ class GoogleSheetManager:
         creds = Credentials.from_service_account_file(self.credential_file, scopes=scope)
         self.client = gspread.authorize(creds)
         self.book = self.client.open_by_key(self.sheet_key)
-        print("✅ Đã kết nối tới Google Sheets")
+        print("[SUCCESS] Connected to Google Sheets")
 
     def get_sheet(self, sheetname):
         """Lấy worksheet theo tên, có cơ chế cache và reconnect."""
@@ -58,7 +58,7 @@ class GoogleSheetManager:
                 self.sheets_cache[sheetname] = self.book.worksheet(sheetname)
             return self.sheets_cache[sheetname]
         except Exception:
-            print("⚠️ Đang kết nối lại Google...")
+            print("[INFO] Reconnecting to Google...")
             self._connect()
             self.sheets_cache = {}
             return self.get_sheet(sheetname)
@@ -79,17 +79,20 @@ class GoogleSheetManager:
         headers = self._safe_api_call(sheet.row_values, 1)
         if headers is None: return
 
-        # 1. Tự động bổ sung cột mới nếu cần
+        # 1. Tự động bổ sung cột mới nếu cần (Xử lý không phân biệt hoa thường)
+        headers_lower = [h.lower() for h in headers]
         new_keys = []
         for row in dict_rows:
             for k in row.keys():
-                if k not in headers and k not in new_keys:
+                k_lower = k.lower()
+                if k_lower not in headers_lower and k_lower not in [nk.lower() for nk in new_keys]:
                     new_keys.append(k)
         
         if new_keys:
             headers.extend(new_keys)
             last_col_letter = gspread.utils.rowcol_to_a1(1, len(headers))[:-1]
             self._safe_api_call(sheet.update, f"A1:{last_col_letter}1", [headers])
+            headers_lower = [h.lower() for h in headers] # Update lower cache
 
         # 2. Xu ly logic Cap nhat theo khoi (Block Update) x Them moi (Append)
         df_sheet = pd.DataFrame(all_records).astype(object)
@@ -104,7 +107,14 @@ class GoogleSheetManager:
                 condition = (df_sheet["date"] == new_row["date"]) & (df_sheet["symbol"] == new_row["symbol"])
                 match = df_sheet[condition]
             
-            ordered_row = [new_row.get(col, "") for col in headers]
+            # Helper to find value in dict with Case-Insensitive key
+            def get_case_insensitive(d, key):
+                k_low = key.lower()
+                for k, v in d.items():
+                    if k.lower() == k_low: return v
+                return ""
+
+            ordered_row = [get_case_insensitive(new_row, col) for col in headers]
 
             if match.empty:
                 rows_to_append.append(ordered_row)

@@ -38,22 +38,52 @@ class VNFinanceModule:
             browser.begin()
             browser.open_new_tab(self.URL_VN30, name='vietstock.vn')
             browser.switch_to_tab('vietstock.vn')
-            # browser.wait_xpath('//*[@id="header-container"]/div[@class="logo"]')
-            browser.wait_xpath('//*[@id="price-board-body"]', timeout=30)
             
-            # Đợi dữ liệu load hoàn toàn (Vietstock load hơi chậm)
-            time.sleep(5)
+            # Đợi bảng giá xuất hiện (Thử nhiều selector cho chắc chắn)
+            selectors = [
+                '//*[@id="price-board-body"]',
+                '//table[@id="price-board"]/tbody',
+                '//div[@id="price-board-container"]//tbody',
+                '//div[contains(@id, "price-board")]//tbody',
+                '//tbody'
+            ]
             
-            raw_element = browser.get_xpath('//*[@id="price-board-body"]')
-            if not raw_element:
-                print("❌ Không tìm thấy bảng giá VN30.")
-                shot = browser.capture_error("vn30_not_found")
+            found = False
+            for sel in selectors:
+                if browser.wait_xpath(sel, timeout=30):
+                    found = True
+                    target_xpath = sel
+                    break
+            
+            if not found:
+                print("❌ Timeout: Không tìm thấy selector bảng giá.")
+                shot = browser.capture_error("vn30_timeout")
                 if self.notifier and shot:
-                    self.notifier.send_photo(shot, caption="❌ <b>Lỗi Scraping VN30</b>\nKhông tìm thấy bảng giá Vietstock.")
+                    self.notifier.send_photo(shot, caption="❌ <b>Lỗi Scraping VN30</b>\nKhông tìm thấy bảng giá Vietstock (Timeout).")
+                return []
+
+            # Đợi dữ liệu load hoàn toàn (Check xem có ít nhất một mã CK nào đó chưa)
+            # Thường là ACB hoặc các mã VN30 phổ biến
+            data_loaded = False
+            for _ in range(10): # Thử đợi thêm tối đa 10s
+                raw_element = browser.get_xpath(target_xpath)
+                if raw_element and "ACB" in raw_element.text:
+                    data_loaded = True
+                    break
+                time.sleep(1)
+            
+            if not data_loaded:
+                print("❌ Dữ liệu chưa kịp load hoặc không tìm thấy mã ACB.")
+                shot = browser.capture_error("vn30_data_empty")
+                if self.notifier and shot:
+                    self.notifier.send_photo(shot, caption="❌ <b>Lỗi Scraping VN30</b>\nDữ liệu bảng giá trống hoặc chưa tải xong.")
                 return []
                 
             raw_text = raw_element.text
             raw_text = raw_text.strip()
+            
+            # Xử lý text thô: Vietstock có thể trả về newline giữa các cell hoặc space
+            # Phân tách logic: Mỗi mã CK bắt đầu một record mới
             lines = [l.strip() for l in raw_text.split("\n") if l.strip()]
 
             records = []
@@ -75,88 +105,111 @@ class VNFinanceModule:
                 "ForeignBuy", "ForeignSell"
             ]
 
-            while i < len(lines):
-                symbol_raw = lines[i]
-                i += 1
-
-                # Skip empty lines
-                if i < len(lines) and lines[i] == "":
-                    i += 1
+            # -------------------------------------------------------------
+            # NEW PARSING LOGIC: Ghép dòng linh hoạt (Phòng trường hợp mỗi cell là 1 line)
+            # -------------------------------------------------------------
+            
+            # List các mã VN30 để làm mốc phân tách (nếu cần)
+            # Hoặc đơn giản là mỗi mã CK có 3-4 ký tự in hoa
+            # Hàm hỗ trợ parse number thông minh (Theo yêu cầu mới)
+            def parse_number(p):
+                # Lưu ý: p vẫn là chuỗi thô từ web
+                p_clean = p.strip()
+                if not p_clean or p_clean == '-': return '0'
                 
-                if i >= len(lines): break
+                # Luật 1: Nếu là % (tính từ phải qua: %, số, dấu phân cách)
+                if p_clean.endswith('%'):
+                    # Ví dụ: "1.5%" hoặc "1,5%"
+                    if len(p_clean) >= 3 and p_clean[-3] in ['.', ',']:
+                        # Đây là dấu thập phân
+                        val_str = p_clean[:-1].replace(',', '.') # Convert to standard float string
+                        return val_str
+                    else:
+                        # Trường hợp % khác (vd: "15%") -> bỏ % lấy số
+                        return p_clean.replace('%', '').replace(',', '.')
                 
-                data_line = lines[i]
-                i += 1
+                # Luật 2: Các số liệu khác (Giá, KL)
+                # "Bỏ hết dấu chấm và phẩy, sau đó nhân 10 sẽ ra giá trị đúng"
+                val_raw = p_clean.replace('.', '').replace(',', '')
+                try:
+                    return str(float(val_raw) * 10)
+                except ValueError:
+                    return '0'
 
-                # Detect special marks
+            def is_symbol(s):
+                # Symbol có 3 chữ in hoa, có thể kèm * hoặc ** (vd: BID*, ACB**)
+                return re.match(r'^[A-Z]{3}\**$', s)
+
+            records = []
+            current_symbol_tokens = []
+            
+            # Hàm xử lý data line cũ hoặc list tokens
+            def build_record_from_tokens(tokens):
+                if len(tokens) < 10: return None # Thiếu dữ liệu tối thiểu
+                
+                symbol_raw = tokens[0]
                 symbol = re.sub(r"\*+", "", symbol_raw)
                 mark = ""
-
-                if symbol_raw.endswith("**"):
-                    mark = "warning"
-                elif symbol_raw.endswith("*"):
-                    mark = "event"
+                if symbol_raw.endswith("**"): mark = "warning"
+                elif symbol_raw.endswith("*"): mark = "event"
                 
-                # Hàm hỗ trợ parse number thông minh (xử lý '%', lỗi dấu chấm/phẩy)
-                def parse_number(p):
-                    p = p.replace('%', '').strip()
-                    if not p or p == '-': return '0'
-                    
-                    # Nếu có nhiều hơn 1 dấu phân cách (như 15.525.70 hoặc 1,552,570)
-                    if p.count('.') + p.count(',') > 1:
-                        last_sep = max(p.rfind('.'), p.rfind(','))
-                        suffix = p[last_sep+1:]
-                        if len(suffix) == 3:
-                            # Chắc chắn là ngắt hàng nghìn, xóa toàn bộ dấu
-                            return p.replace('.', '').replace(',', '')
-                        else:
-                            # Lỗi định dạng vd: 15,525,70 -> Xóa các dấu trước, chỉ giữ dấu cuối làm thập phân
-                            int_part = p[:last_sep].replace('.', '').replace(',', '')
-                            return int_part + '.' + suffix
+                # Gom các tokens còn lại làm data
+                # Nếu tokens[1] là một chuỗi dài (space separated), split nó ra
+                all_data_points = []
+                for t in tokens[1:]:
+                    if " " in t:
+                        all_data_points.extend(t.split(" "))
                     else:
-                        # 0 hoặc 1 dấu phân cách
-                        if '.' in p or ',' in p:
-                            sep_idx = max(p.rfind('.'), p.rfind(','))
-                            if len(p[sep_idx+1:]) == 3:
-                                # Dấu ngắt hàng nghìn (vd: 1,552)
-                                return p.replace('.', '').replace(',', '')
-                            else:
-                                # Dấu thập phân (vd: 23.45 hoặc 23,45)
-                                return p.replace(',', '.')
-                        else:
-                            return p
+                        all_data_points.append(t)
                 
-                parts = [parse_number(p) for p in data_line.split(" ")]
+                # Parse all numbers
+                parts = [parse_number(p) for p in all_data_points]
                 
-                # Build record
+                # Map vào columns (Lấy chính xác theo index)
+                # Symbol, Note là 2 cột đầu
                 rec = [symbol, mark] + parts
                 
-                # Prepare dictionary to keep compatibility with existing code
                 record = {
                     "date": datetime.now().strftime("%Y-%m-%d"),
                     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
                     "type": "VN30_STOCK",
                     "symbol": symbol,
-                    "close": float(parts[9].replace("%", "")) if len(parts) > 9 else 0,        # Same as MatchPrice
-                    "change": float(parts[11].replace("%", "")) if len(parts) > 11 else 0,     # Same as Change
-                    "change_pct": float(parts[12].replace("%", "")) if len(parts) > 12 else 0, # Same as ChangePct
-                    "volume": int(float(parts[19].replace("%", ""))) if len(parts) > 19 else 0 # Same as TotalVol
+                    "close": float(parts[9]) if len(parts) > 9 else 0,        # MatchPrice
+                    "change": float(parts[11]) if len(parts) > 11 else 0,     # Change
+                    "change_pct": float(parts[12]) if len(parts) > 12 else 0, # ChangePct
+                    "volume": int(float(parts[19])) if len(parts) > 19 else 0 # TotalVol
                 }
 
-                # Add all scraped columns into record mapping
+                # Link all defined columns
                 for idx, col_name in enumerate(columns):
                     if idx < len(rec):
                         val = rec[idx]
                         if col_name not in ["Symbol", "Note"] and val:
-                            try:
-                                val = float(val)
-                            except ValueError:
-                                pass
+                            try: val = float(val)
+                            except ValueError: pass
                         record[col_name] = val
                     else:
                         record[col_name] = ""
-                        
-                records.append(record)
+                return record
+
+            # Gom nhóm tokens theo Symbol
+            i = 0
+            while i < len(lines):
+                token = lines[i]
+                if is_symbol(token):
+                    # Nếu đang có dở dang symbol trước đó, build nó
+                    if current_symbol_tokens:
+                        res = build_record_from_tokens(current_symbol_tokens)
+                        if res: records.append(res)
+                    current_symbol_tokens = [token]
+                else:
+                    current_symbol_tokens.append(token)
+                i += 1
+            
+            # Đừng quên cái cuối cùng
+            if current_symbol_tokens:
+                res = build_record_from_tokens(current_symbol_tokens)
+                if res: records.append(res)
             
             return records
         finally:
@@ -184,10 +237,10 @@ class VNFinanceModule:
             browser.switch_to_tab('vietstock_main')
             
             # Selector cho VN-Index và VN30 (tùy thuộc vào site Vietstock cập nhật)
-            # Giả định lấy từ các thẻ header
             res = []
-            # Ví dụ: VN-Index
-            vni_p = browser.get_text('//*[@id="vne-index-last"]') # Giả định id
+            
+            # 1. VN-Index
+            vni_p = browser.get_text('//*[@id="vne-index-last"]')
             vni_c = browser.get_text('//*[@id="vne-index-change"]')
             
             if vni_p:
@@ -196,7 +249,21 @@ class VNFinanceModule:
                     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
                     "symbol": "VNINDEX",
                     "close": float(vni_p.replace(",", "")),
-                    "change_pct": float(vni_c.replace("%", "").strip()),
+                    "change_pct": float(vni_c.split("(")[-1].replace(")", "").replace("%", "").strip()) if "(" in vni_c else 0,
+                    "type": "INDEX"
+                })
+
+            # 2. VN30-Index
+            vn30_p = browser.get_text('//*[@id="vne-vn30-index-last"]')
+            vn30_c = browser.get_text('//*[@id="vne-vn30-index-change"]')
+
+            if vn30_p:
+                res.append({
+                    "date": datetime.now().strftime("%Y-%m-%d"),
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "symbol": "VN30",
+                    "close": float(vn30_p.replace(",", "")),
+                    "change_pct": float(vn30_c.split("(")[-1].replace(")", "").replace("%", "").strip()) if "(" in vn30_c else 0,
                     "type": "INDEX"
                 })
             
@@ -208,6 +275,11 @@ class VNFinanceModule:
             return [] # Mock hoặc bỏ qua nếu selector sai
         finally:
             browser.close()
+
+    def _format_price(self, price_vnd):
+        """Hiển thị giá theo đơn vị nghìn (k) (vd: 27500 -> 27.5k)."""
+        if not price_vnd: return "0"
+        return f"{price_vnd/1000:,.2f}k".rstrip('0').rstrip('.') + 'k'
 
     def _format_vol(self, vol):
         """Format khối lượng giao dịch linh hoạt (cp, K, Tr), giới hạn 3 chữ số trước thập phân."""
@@ -315,7 +387,8 @@ class VNFinanceModule:
                 
                 # Hàm helper in dòng
                 def format_row(s):
-                    return f"{s['symbol']:<6} {s['close']:>6.2f} {s['change_pct']:>+6.1f}% {'-':>4} {'-':>4} {'-':>4} {'-':>4}\n"
+                    price_str = self._format_price(s['close'])
+                    return f"{s['symbol']:<6} {price_str:>7} {s['change_pct']:>+6.1f}% {'-':>4} {'-':>4} {'-':>4} {'-':>4}\n"
                 
                 for s in top_gainers:
                     report += format_row(s)
