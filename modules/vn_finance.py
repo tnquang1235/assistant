@@ -49,6 +49,7 @@ class VNFinanceModule:
             ]
             
             found = False
+            target_xpath = ""
             for sel in selectors:
                 if browser.wait_xpath(sel, timeout=30):
                     found = True
@@ -58,29 +59,44 @@ class VNFinanceModule:
             if not found:
                 print("❌ Timeout: Không tìm thấy selector bảng giá.")
                 shot = browser.capture_error("vn30_timeout")
-                if self.notifier and shot:
-                    self.notifier.send_photo(shot, caption="❌ <b>Lỗi Scraping VN30</b>\nKhông tìm thấy bảng giá Vietstock (Timeout).")
+                if self.notifier:
+                    msg = "❌ <b>Lỗi Scraping VN30</b>\nKhông tìm thấy bảng giá Vietstock (Timeout)."
+                    if shot: self.notifier.send_photo(shot, caption=msg)
+                    else: self.notifier.send(msg)
                 return []
 
-            # Đợi dữ liệu load hoàn toàn (Check xem có ít nhất một mã CK nào đó chưa)
-            # Thường là ACB hoặc các mã VN30 phổ biến
+            # Đợi dữ liệu thực tế xuất hiện (Ít nhất 5 dòng dữ liệu)
             data_loaded = False
-            for _ in range(10): # Thử đợi thêm tối đa 10s
-                raw_element = browser.get_xpath(target_xpath)
-                if raw_element and "ACB" in raw_element.text:
+            for _ in range(15): # Thử đợi thêm tối đa 15s
+                row_count = browser.count_xpath(f"{target_xpath}/tr")
+                if row_count >= 5:
                     data_loaded = True
                     break
                 time.sleep(1)
             
             if not data_loaded:
-                print("❌ Dữ liệu chưa kịp load hoặc không tìm thấy mã ACB.")
+                print(f"❌ Dữ liệu trống hoặc không đủ dòng.")
                 shot = browser.capture_error("vn30_data_empty")
-                if self.notifier and shot:
-                    self.notifier.send_photo(shot, caption="❌ <b>Lỗi Scraping VN30</b>\nDữ liệu bảng giá trống hoặc chưa tải xong.")
+                if self.notifier:
+                    msg = f"❌ <b>Lỗi Scraping VN30</b>\nBảng giá trống hoặc chưa tải xong (Chỉ thấy {browser.count_xpath(f'{target_xpath}/tr')} dòng)."
+                    if shot: self.notifier.send_photo(shot, caption=msg)
+                    else: self.notifier.send(msg)
+                return []
+                
+            raw_element = browser.get_xpath(target_xpath)
+            if not raw_element: 
                 return []
                 
             raw_text = raw_element.text
             raw_text = raw_text.strip()
+            
+            if not raw_text or len(raw_text) < 50:
+                 shot = browser.capture_error("vn30_text_too_short")
+                 if self.notifier:
+                    msg = "❌ <b>Lỗi Scraping VN30</b>\nDữ liệu bảng giá quá ngắn hoặc trống."
+                    if shot: self.notifier.send_photo(shot, caption=msg)
+                    else: self.notifier.send(msg)
+                 return []
             
             # Xử lý text thô: Vietstock có thể trả về newline giữa các cell hoặc space
             # Phân tách logic: Mỗi mã CK bắt đầu một record mới
@@ -212,6 +228,11 @@ class VNFinanceModule:
                 if res: records.append(res)
             
             return records
+        except Exception as e:
+            print(f"❌ Lỗi hệ thống khi Scraping VN30: {e}")
+            if self.notifier:
+                self.notifier.send(f"🚨 <b>Lỗi Hệ thống VN_Finance</b>\nKhông thể hoàn thành cào dữ liệu VN30.\nChi tiết: {str(e)[:200]}")
+            return []
         finally:
             browser.close()
 
