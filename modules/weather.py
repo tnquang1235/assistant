@@ -16,7 +16,7 @@ class WeatherModule:
 
     def get_report(self):
         """Lấy thời tiết chi tiết và tạo bản tin thẩm mỹ cao."""
-        print("🌤 Đang lấy dữ liệu thời tiết...")
+        print("[INFO] Fetching weather data...")
         now = datetime.now(self.tz)
         timestamp = now.strftime("%Y-%m-%d %H:%M")
         
@@ -69,7 +69,7 @@ class WeatherModule:
                     "description": desc
                 })
             except Exception as e:
-                print(f"⚠️ Lỗi thời tiết {city}: {e}")
+                print(f"[ERROR] Weather error {city}: {e}")
 
         report += "</pre>"
 

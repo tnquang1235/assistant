@@ -154,12 +154,12 @@ class GoogleSheetManager:
             range_label = f"A{start_row}:{last_col_letter}{end_row}"
             
             self._safe_api_call(sheet.update, range_label, block_data)
-            print(f"[REPLACE] Block Overwrite thanh cong: {range_label} ({len(block_data)} hang)")
+            print(f"[REPLACE] Block Overwrite successful: {range_label} ({len(block_data)} rows)")
 
         # 4. Thuc thi Them moi hang loat
         if rows_to_append:
             self._safe_api_call(sheet.append_rows, rows_to_append)
-            print(f"[APPEND] Them moi hang loat thanh cong: {len(rows_to_append)} ma.")
+            print(f"[APPEND] Batch append successful: {len(rows_to_append)} records.")
 
     def append_rows(self, sheetname, dict_rows):
         """Them cac hang moi vao sheet (khong kiem tra trung)."""
@@ -169,7 +169,7 @@ class GoogleSheetManager:
         
         rows = [[data.get(col, "") for col in headers] for data in dict_rows]
         self._safe_api_call(sheet.append_rows, rows)
-        print(f"[APPEND] Da them {len(rows)} hang vao {sheetname}")
+        print(f"[APPEND] Added {len(rows)} rows to {sheetname}")
 
     def update_cell_by_match(self, sheetname, match_col, match_val, update_col, new_val):
         """Tìm hàng có match_col = match_val và cập nhật update_col = new_val."""
@@ -188,5 +188,18 @@ class GoogleSheetManager:
                     self._safe_api_call(sheet.update_cell, row_num, target_col_idx, new_val)
                     return True
         except ValueError:
-            print(f"[ERROR] Khong tim thay cot: {update_col}")
+            print(f"[ERROR] Column not found: {update_col}")
+        return False
+
+    def update_cell_by_row(self, sheetname, row_num, update_col, new_val):
+        """Cập nhật dữ liệu vào ô dựa trên dòng thực tế và tên cột."""
+        sheet = self.get_sheet(sheetname)
+        headers = self._safe_api_call(sheet.row_values, 1)
+        if headers is None: return False
+        try:
+            target_col_idx = headers.index(update_col) + 1
+            self._safe_api_call(sheet.update_cell, row_num, target_col_idx, new_val)
+            return True
+        except ValueError:
+            print(f"[ERROR] Column not found: {update_col}")
         return False

@@ -40,6 +40,11 @@ class EnglishModule:
         Sử dụng _parse_date để xử lý sai lệch định dạng DD/MM/YYYY vs YYYY-MM-DD.
         """
         all_vocab = self.gs.get_all_records(self.sheet_name)
+        if all_vocab:
+            # Gắn chỉ mục dòng để tránh lỗi lặp từ đa nghĩa (Trì hoãn review)
+            for idx, word_dict in enumerate(all_vocab):
+                word_dict["_row_num"] = idx + 2
+
         now_dt = datetime.now(self.tz).date()
         now_str = now_dt.strftime("%d/%m/%Y") # Dùng định dạng của Sheet để ghi lại nếu cần
         
@@ -83,7 +88,11 @@ class EnglishModule:
                 target_new = random.sample(available_new, count)
                 for w in target_new:
                     # Ghi ngay hoc theo dinh dang hien tai cua Sheet (DD/MM/YYYY)
-                    self.gs.update_cell_by_match(self.sheet_name, "word", w["word"], "date_learned", now_str)
+                    if "_row_num" in w and hasattr(self.gs, "update_cell_by_row"):
+                        self.gs.update_cell_by_row(self.sheet_name, w["_row_num"], "date_learned", now_str)
+                    else:
+                        self.gs.update_cell_by_match(self.sheet_name, "word", w["word"], "date_learned", now_str)
+                    
                     w["date_learned"] = now_str
                     self._update_srs(w, is_initial=True)
 
@@ -103,21 +112,35 @@ class EnglishModule:
         # Lần 5: Ngẫu nhiên trong 3 tháng sau lần ôn 4
         intervals = [1, 3, 7, 30, random.randint(60, 90)]
         now_dt = datetime.now(self.tz)
+        row_num = word_dict.get("_row_num")
+        use_row = row_num is not None and hasattr(self.gs, "update_cell_by_row")
         
         if is_initial:
             next_date = (now_dt + timedelta(days=intervals[0])).strftime("%d/%m/%Y")
-            self.gs.update_cell_by_match(self.sheet_name, "word", word_dict["word"], "next_review", next_date)
-            self.gs.update_cell_by_match(self.sheet_name, "word", word_dict["word"], "review_count", 0)
+            if use_row:
+                self.gs.update_cell_by_row(self.sheet_name, row_num, "next_review", next_date)
+                self.gs.update_cell_by_row(self.sheet_name, row_num, "review_count", 0)
+            else:
+                self.gs.update_cell_by_match(self.sheet_name, "word", word_dict["word"], "next_review", next_date)
+                self.gs.update_cell_by_match(self.sheet_name, "word", word_dict["word"], "review_count", 0)
         else:
             if count < len(intervals):
                 days = intervals[count]
                 next_date = (now_dt + timedelta(days=days)).strftime("%d/%m/%Y")
-                self.gs.update_cell_by_match(self.sheet_name, "word", word_dict["word"], "next_review", next_date)
-                self.gs.update_cell_by_match(self.sheet_name, "word", word_dict["word"], "review_count", count + 1)
+                if use_row:
+                    self.gs.update_cell_by_row(self.sheet_name, row_num, "next_review", next_date)
+                    self.gs.update_cell_by_row(self.sheet_name, row_num, "review_count", count + 1)
+                else:
+                    self.gs.update_cell_by_match(self.sheet_name, "word", word_dict["word"], "next_review", next_date)
+                    self.gs.update_cell_by_match(self.sheet_name, "word", word_dict["word"], "review_count", count + 1)
             else:
                 # Đã hoàn thành toàn bộ chu kỳ ôn tập
-                self.gs.update_cell_by_match(self.sheet_name, "word", word_dict["word"], "status", "Mastered")
-                self.gs.update_cell_by_match(self.sheet_name, "word", word_dict["word"], "next_review", "DONE")
+                if use_row:
+                    self.gs.update_cell_by_row(self.sheet_name, row_num, "status", "Mastered")
+                    self.gs.update_cell_by_row(self.sheet_name, row_num, "next_review", "DONE")
+                else:
+                    self.gs.update_cell_by_match(self.sheet_name, "word", word_dict["word"], "status", "Mastered")
+                    self.gs.update_cell_by_match(self.sheet_name, "word", word_dict["word"], "next_review", "DONE")
 
     GRAMMAR_B2 = [
         "Present Perfect Continuous",

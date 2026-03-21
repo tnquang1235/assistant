@@ -8,6 +8,13 @@
 logs/
 *.log
 
+# Runtime and logs
+logs/
+*.json
+!vocabulary.csv
+!package.json
+!composer.json
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

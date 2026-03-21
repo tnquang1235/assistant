@@ -1,67 +1,85 @@
-import time
+import os
+import re
 import sys
-import io
-
-# Cấu hình encoding cho terminal Windows (Tránh lỗi Emoji/Unicode)
-if sys.stdout.encoding != 'utf-8':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-
-from config import settings
-from modules.google_sheets import GoogleSheetManager
-from modules.notifier import TelegramNotifier
+import time
+from datetime import datetime
+from scc.controller import ChromeController
 from modules.vn_finance import VNFinanceModule
 
-# ================= INITIALIZATION =================
-# Hoạt động giống main.py nhưng chỉ khởi tạo các thành phần cần thiết cho VN Finance
+# Mock GS only for logging
+class MockGS:
+    def update_financial_optimized(self, sheet_name, data):
+        print(f"   [GS-MOCK] Data would be sent to '{sheet_name}' ({len(data)} rows)")
 
-bot = TelegramNotifier(settings.BOT_TOKEN, settings.CHAT_ID)
-
-# VN_FINANCE_SHEET_ID có thể bị thiếu trong .env, ta sẽ tạo dummy manager nếu cần
-# hoặc fallback về một ID hợp lệ để test logic lấy dữ liệu (scrape)
-vn_sheet_id = getattr(settings, 'VN_FINANCE_SHEET_ID', None)
-
-if not vn_sheet_id:
-    print("[INFO] VN_FINANCE_SHEET_ID missing in .env. Logging data without updating Google Sheets.")
-    class MockGS:
-        def update_financial_optimized(self, sheet_name, data):
-            print(f"[DEBUG] MockGS would update sheet '{sheet_name}' with {len(data)} records.")
-    gs_vn = MockGS()
-else:
-    try:
-        gs_vn = GoogleSheetManager(settings.GOOGLE_CREDENTIAL_FILE, vn_sheet_id)
-    except Exception as e:
-        print(f"[WARN] Could not connect to Google Sheets: {e}")
-        class MockGS:
-            def update_financial_optimized(self, sheet_name, data):
-                print(f"[DEBUG] MockGS (Fallback): {len(data)} records processed.")
-        gs_vn = MockGS()
-
-vn_fin = VNFinanceModule(gs_vn, notifier=bot)
-
-def test_vn_finance_job():
-    """
-    Chỉ tập trung chạy chức năng vn_finance
-    """
-    print(f"[*] [{time.strftime('%Y-%m-%d %H:%M:%S')}] Running VN Finance Test...")
+def run_test():
+    print("=" * 50)
+    print(f"DIAGNOSTIC TEST: VIETSTOCK SCRAPING ({datetime.now()})")
+    print("=" * 50)
+    
+    # Initialize module (Controller will handle path resolution)
+    vn = VNFinanceModule(MockGS())
+    
+    # We create controller without explicit path to use its internal search/cache
+    browser = ChromeController(headless=True)
+    actual_path = browser.driver_path # Resolved path
+    
+    print(f"[INFO] Using Chromedriver at: {actual_path}")
     
     try:
-        # Lấy báo cáo vn_finance với session="Afternoon"
-        report = vn_fin.get_report(session="Afternoon")
+        browser.begin()
         
-        print("\n--- REPORT CONTENT BEGIN ---")
-        print(report)
-        print("--- REPORT CONTENT END ---\n")
-        
-        # Gửi qua Telegram
-        bot.send(report)
-        print("[+] Message command sent to Telegram notifier successfully.")
+        # [STEP 1] Testing Index Summary
+        print("\n[STEP 1] Testing Index Summary Scraping (VN-Index, VN30)...")
+        browser.open_new_tab(vn.URLs["MARKET"], name='test_m')
+        browser.switch_to_tab('test_m')
+        print("   [INFO] Waiting 10s for page navigation...")
+        time.sleep(10)
+        indices = vn._scrape_indices_summary(browser)
+        if indices:
+            print(f"[OK] Successfully fetched {len(indices)} indices.")
+        else:
+            print("[ERROR] Failed to fetch indices.")
+            browser.screenshot("test_fail_indices.png")
+            print("   [INFO] Saved screenshot to logs/screenshots/test_fail_indices.png")
+
+        # [STEP 2] Testing Detail VN30
+        print("\n[STEP 2] Testing Details VN30 Stock Scraping...")
+        browser.open_new_tab(vn.URLs["VN30"], name='test_v')
+        browser.switch_to_tab('test_v')
+        print("   [INFO] Waiting 10s for page navigation...")
+        time.sleep(10)
+        stocks = vn._scrape_vn30_data(browser)
+        if stocks:
+            print(f"[OK] Detected {len(stocks)} data rows correctly.")
+        else:
+            print("[ERROR] Failed to fetch stock table.")
+
+        # [STEP 3] Testing Full Report Format
+        print("\n[STEP 3] Testing Telegram Report Generation...")
+        # Note: This will re-run the whole flow internally as a black-box test
+        report = vn.get_report(session="DIAGNOSTIC_RUN")
+        print("-" * 30)
+        # Filter out potential unicode in report for console safety
+        clean_report = report.encode('ascii', 'ignore').decode('ascii')
+        print(clean_report)
+        print("-" * 30)
         
     except Exception as e:
+        print(f"\n[CRITICAL ERROR] Test crashed: {e}")
         import traceback
-        print(f"[-] Error during VN Finance Test: {e}")
         traceback.print_exc()
+    finally:
+        browser.close()
+        print("\n[DONE] Diagnostic completed.")
 
 if __name__ == "__main__":
-    print("[*] Khởi động script kiểm tra VN Finance...")
-    test_vn_finance_job()
-    print("[*] Kết thúc kiểm tra.")
+    try:
+        run_test()
+    except Exception as e:
+        # Final fallback for errors to avoid encoding crash
+        try:
+            print(f"\n[FATAL] Error occurred during test: {str(e)}")
+        except:
+             print("\n[FATAL] Error occurred, could not print details due to encoding.")
+        import traceback
+        traceback.print_exc()

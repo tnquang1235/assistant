@@ -155,12 +155,33 @@ Nhằm đối phó với hạn mức (Quota) của Google Sheets API và lỗi m
 
 ---
 
-## 6. 🔌 Tương thích Phần cứng & Đa nền tảng (Hardware Efficiency)
+## 8. 🔌 Tương thích Phần cứng & Đa nền tảng (Hardware Efficiency)
 Assistant v1.3 được tối ưu đặc biệt để chạy bền bỉ 24/7 trên các hệ thống tài nguyên thấp:
 
 - **Hỗ trợ Headless/Raspberry Pi**: 
     - Toàn bộ các thư viện GUI (pymsgbox, tkinter) được chuyển sang cơ chế **Nạp chậm (Lazy Import)** và bọc trong khối xử lý lỗi. Điều này giúp Bot khởi động mượt mà trên môi trường Linux Server/Docker/Raspberry Pi mà không bị treo do thiếu trình quản lý cửa sổ.
     - Tự động phát hiện OS để chọn đường dẫn ChromeDriver phù hợp (`/usr/bin/chromedriver` trên Linux hoặc file `.exe` trên Windows).
+
+## 10. Triết lý Vận hành & Bảo trì (Maintenance Philosophy)
+
+Hệ thống được thiết kế để chạy 24/7 trên máy chủ từ xa (VPS/Pi), do đó quy trình xử lý lỗi tuân theo nguyên tắc "Hai tầng cảnh báo":
+
+### 10.1. Tầng 1: Cảnh báo Telegram (Nhanh & Gọn)
+- **Mục tiêu:** Giúp người dùng biết ngay lỗi cơ bản (như cấu trúc web thay đổi) mà không cần đăng nhập vào máy chủ.
+- **Nội dung:** Chỉ bao gồm Step bị lỗi, nguyên nhân chính (Timeout/Empty) và danh sách XPaths đã thử. 
+- **Hành động:** Người dùng có thể kiểm tra nhanh bằng điện thoại/laptop để xác định có cần sửa code hay chỉ là lỗi mạng nhất thời.
+
+### 10.2. Tầng 2: Log Terminal (Chi tiết & Chuyên sâu)
+- **Mục tiêu:** Phục vụ việc sửa lỗi phức tạp (Debug) khi người dùng đã remote vào máy chủ.
+- **Nội dung:** Hiển thị chi tiết từng bước (1/3, 2/3...), số lượng dòng dữ liệu, tên driver, phiên bản Chrome và các vết lỗi (StackTrace).
+
+### 10.3. Tầng 3: Chẩn đoán bằng File Test (Xác định & Cách ly)
+- **Mục tiêu:** Kiểm tra môi trường cô lập sau khi đã điều chỉnh code/cấu hình để khẳng định lỗi đã được fix.
+- **Cách làm:** Sử dụng các file test chuyên dụng như `test_vn_finance.py`.
+- **Hành động:** Chạy lệnh `python test_vn_finance.py` tại console máy chủ để xem kết quả mô phỏng trước khi quay lại chạy chính thức phiên giao dịch thật.
+
+---
+*(Nguyên tắc này cũng áp dụng cho mọi lần nâng cấp phần mềm sau này để đảm bảo tính tiện lợi tối đa).*
 - **Tối ưu hóa Tài nguyên**: 
     - Sử dụng bộ lọc dữ liệu thông minh để chỉ cập nhật Google Sheets khi có biến động giá thực sự, giúp giảm tải CPU và băng thông mạng.
     - Các lệnh `print` được loại bỏ Emoji (Unicode Clean-up) để tương thích tuyệt đối với Windows Terminal mặc định, tránh lỗi `UnicodeEncodeError`.

@@ -66,7 +66,8 @@ class ChromeController:
         if self.user_data_dir:
             chrome_options.add_argument(f"--user-data-dir={self.user_data_dir}")
 
-        service = Service(self._choose_driver_path())
+        self.driver_path = self._choose_driver_path() # Store resolved path
+        service = Service(self.driver_path)
         self.browser = webdriver.Chrome(service=service, options=chrome_options)
         self.actions = ActionChains(self.browser)
 
@@ -300,29 +301,110 @@ class ChromeController:
     def capture_error(self, prefix: str = "error") -> Optional[str]:
         return self._save_screenshot(prefix)
 
+    def screenshot(self, filename: str):
+        """Chụp ảnh màn hình lưu vào logs/screenshots."""
+        if not self.browser or not self.screenshot_dir: return
+        fp = os.path.join(str(self.screenshot_dir), filename)
+        self.browser.save_screenshot(fp)
+        logger.info(f"Screenshot saved: {fp}")
+
     # ---------------------------------------------------------
     # 10. Internal Helpers
     # ---------------------------------------------------------
 
-    def _choose_driver_path(self) -> str:
-        if self.driver_path and os.path.exists(self.driver_path):
-            return str(self.driver_path)
-        for c in ["chromedriver", "chromedriver.exe"]:
-            if os.path.exists(c): return os.path.abspath(c)
-        
-        logger.info("Yêu cầu chọn chromedriver qua dialog (chỉ hỗ trợ Windows/Desktop)...")
+    def _check_version_compatibility(self, driver_path: str):
+        """Kiểm tra tương thích giữa Chrome và Driver."""
+        import subprocess
         try:
-            import pymsgbox
-            path = pymsgbox.prompt("Nhập đường dẫn chromedriver:")
-            if path and os.path.exists(path): return path
+            # 1. Lấy version Chrome (Windows)
+            if os.name == 'nt':
+                cmd = 'powershell -command "(Get-Item \'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\').VersionInfo.ProductVersion"'
+                chrome_ver = subprocess.check_output(cmd, shell=True).decode().strip()
+            else: # Linux
+                chrome_ver = subprocess.check_output(['google-chrome', '--version']).decode().strip().split()[-1]
             
-            from tkinter.filedialog import askopenfilename
-            selected = askopenfilename(title='Select Chrome Driver', filetypes=[("exe", "*.exe"), ("all", "*")])
-            if selected: return selected
+            # 2. Lấy version Driver
+            driver_ver_raw = subprocess.check_output([driver_path, '--version']).decode().strip()
+            driver_ver = driver_ver_raw.split()[1] # Ví dụ: "ChromeDriver 123.0.xxx" -> "123.0.xxx"
+            
+            major_chrome = chrome_ver.split('.')[0]
+            major_driver = driver_ver.split('.')[0]
+            
+            if major_chrome != major_driver:
+                logger.warning(f"[VERSION] Co the ton tai rui ro ko tuong thich: Chrome {major_chrome} vs Driver {major_driver}")
+            else:
+                logger.info(f"[VERSION] Chrome & Driver tuong thich (v{major_chrome})")
         except Exception as e:
-            logger.warning(f"Không thể mở giao diện chọn file (có thể do môi trường Headless/Linux): {e}")
+            logger.info(f"[VERSION] Khong the kiem tra phien ban: {e}")
+
+    def _choose_driver_path(self) -> str:
+        cache_file = "logs/paths.json"
+        if not os.path.exists("logs"): os.makedirs("logs")
         
-        raise FileNotFoundError(f"Không tìm thấy Chromedriver tại: {self.driver_path}. Vui lòng kiểm tra lại cấu hình.")
+        # 1. Luu tru duong dan hop le (Cache)
+        cached_path = ""
+        if os.path.exists(cache_file):
+            try:
+                with open(cache_file, 'r') as f:
+                    cached_path = json.load(f).get("chromedriver_path", "")
+            except: pass
+
+        # 2. Thu tu tim kiem
+        candidates = [
+            self.driver_path,        # Khoi tao ban dau
+            "./chromedriver.exe",    # Mac dinh folder phan mem
+            "./chromedriver",        # Linux mac dinh
+            cached_path,             # Tu gia tri luu tru
+            "/usr/bin/chromedriver"  # System path Linux
+        ]
+        
+        # Loc bo trung lap và None
+        candidates = list(dict.fromkeys([c for c in candidates if c]))
+        
+        for c in candidates:
+            if os.path.exists(c):
+                final_path = os.path.abspath(c)
+                self._check_version_compatibility(final_path)
+                # Luu lai neu tim thay path moi
+                if final_path != cached_path:
+                    try:
+                        with open(cache_file, 'w') as f:
+                            json.dump({"chromedriver_path": final_path}, f)
+                    except: pass
+                return final_path
+        
+        # 3. Last resort: Thu gui interface de nguoi dung cung cap path
+        logger.info("[WARN] Khong tim thay Chromedriver. Vui long cung cap duong dan.")
+        try:
+            path = ""
+            # Buoc 3a: Nhap thu cong duong dan (Toi uu neu da copy san path)
+            try:
+                import pymsgbox
+                path = pymsgbox.prompt("Buoc 1/2: Nhap duong dan Chromedriver (Hoac nhan Cancel de chon tep):", 
+                                       default="D:/Softwares/chromedriver.exe")
+            except: pass
+            
+            # Buoc 3b: Chon tep qua cua so Explorer (Neu Buoc 3a bo qua)
+            if not path or not os.path.exists(path):
+                try:
+                    from tkinter.filedialog import askopenfilename
+                    import tkinter as tk
+                    root = tk.Tk()
+                    root.withdraw()
+                    path = askopenfilename(title='Buoc 2/2: Chon tep chromedriver.exe', 
+                                         filetypes=[("exe", "*.exe"), ("all", "*")])
+                    root.destroy()
+                except: pass
+                
+            if path and os.path.exists(path):
+                # Luu lai path hop le duy nhat de lan sau khoi hoi
+                with open(cache_file, 'w') as f:
+                    json.dump({"chromedriver_path": path}, f)
+                return path
+        except Exception as e:
+            logger.warning(f"[ERROR] Khong the thuc hien thu thap duong dan: {e}")
+        
+        raise FileNotFoundError(f"Khong tim thay Chromedriver. Vui long dat file vao folder phan mem hoac cau hinh dung.")
 
     def _build_options(self) -> Options:
         opts = Options()

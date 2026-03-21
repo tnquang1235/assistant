@@ -7,440 +7,337 @@ from scc.controller import ChromeController
 class VNFinanceModule:
     """
     Module xử lý dữ liệu chứng khoán Việt Nam (VN-Index, VN30, Ngành).
-    Sử dụng SCC để cào dữ liệu từ Vietstock.
+    Phiên bản: 1.4.0 (Refactored for maintainability)
     """
+
+    # =========================================================
+    # BẢNG CẤU HÌNH XPATHS (Dễ dàng điều chỉnh khi Web đổi cấu trúc)
+    # =========================================================
     
-    URL_VN30 = "https://banggia.vietstock.vn/bang-gia/vn30"
-    URL_MARKET = "https://banggia.vietstock.vn/"
+    # 1. Cấu hình bảng giá VN30 (Dùng trong _scrape_vn30_data)
+    # Thứ tự ưu tiên: Bot sẽ thử từ trên xuống dưới
+    VN30_TABLE_SELECTORS = [
+        '//tbody[@id="price-board-body"]',      # Yêu cầu ưu tiên của người dùng
+        '//table[@id="stock-table"]/tbody',      # Cấu trúc mới phát hiện
+        '//table[@id="price-board"]/tbody',      # Cấu trúc cũ
+        '//tbody'                                # Dự phòng cuối cùng
+    ]
+
+    # 2. Cấu hình các chỉ số thị trường (Dùng trong _scrape_indices_summary)
+    # Structural XPaths (Targeting by position in the indices bar)
+    INDEX_CONFIG = {
+        "VNINDEX": {
+            "label": "VN-INDEX",
+            "val_xpath": '(//div[@id="header-indices"]//div[contains(@class, "index-item")])[1]//div[contains(@class, "index-price")]',
+            "chg_xpath": '(//div[@id="header-indices"]//div[contains(@class, "index-item")])[1]//div[contains(@class, "index-change")]'
+        },
+        "VN30": {
+            "label": "VN30-INDEX",
+            "val_xpath": '(//div[@id="header-indices"]//div[contains(@class, "index-item")])[4]//div[contains(@class, "index-price")]',
+            "chg_xpath": '(//div[@id="header-indices"]//div[contains(@class, "index-item")])[4]//div[contains(@class, "index-change")]'
+        }
+    }
+
+    URLs = {
+        "VN30": "https://banggia.vietstock.vn/bang-gia/vn30",
+        "MARKET": "https://banggia.vietstock.vn/"
+    }
+
+    # Danh sách cột chuẩn hóa cho Google Sheets
+    COLUMNS_VN_INDEX = [
+        "Symbol", "Note",
+        "RefPrice", "Ceiling", "Floor",
+        "BidPrice3", "BidVol3", "BidPrice2", "BidVol2", "BidPrice1", "BidVol1",
+        "MatchPrice", "MatchVol", "Change", "ChangePct",
+        "AskPrice1", "AskVol1", "AskPrice2", "AskVol2", "AskPrice3", "AskVol3",
+        "TotalVol", "High", "Low", "Avg",
+        "ForeignBuy", "ForeignSell"
+    ]
+
+    # =========================================================
 
     def __init__(self, google_manager, notifier=None, chromedriver_path="./chromedriver.exe"):
         self.gs = google_manager
         self.notifier = notifier
         self.chromedriver_path = chromedriver_path
 
-    def _scrape_vn30_data(self):
-        """Cào dữ liệu VN30 stocks từ Vietstock."""
-        print("🔍 Đang lấy dữ liệu VN30 stocks từ Vietstock...")
+    @staticmethod
+    def parse_number(p, is_vol=False):
+        """Hàm xử lý số liệu theo quy tắc 10x và xử lý %."""
+        p_clean = p.strip()
+        if not p_clean or p_clean == '-': return '0'
         
-        # --- Cân chỉnh tài nguyên tự động cho Raspberry Pi / Linux ---
-        import platform
-        if platform.system() == "Linux":
-            # Trên Linux/Raspberry, ChromeDriver nằm ở vị trí khác và cần các flag bypass sandbox/RAM
-            d_path = "/usr/bin/chromedriver"
-            e_args = ["--no-sandbox", "--disable-dev-shm-usage"]
-        else:
-            d_path = self.chromedriver_path
-            e_args = []
-            
-        browser = ChromeController(driver_path=d_path, headless=True, extra_args=e_args)
+        # Luật 1: Nếu là % (tính từ phải qua: %, số, dấu phân cách)
+        if p_clean.endswith('%'):
+            if len(p_clean) >= 3 and p_clean[-3] in ['.', ',']:
+                return p_clean[:-1].replace(',', '.') # Convert sang float chuẩn
+            return p_clean.replace('%', '').replace(',', '.')
+        
+        # Luật 2: Bỏ hết dấu chấm/phẩy và nhân 10
+        val_raw = p_clean.replace('.', '').replace(',', '')
+        try:
+            if is_vol: # Volume doesn't need *10
+                return str(float(val_raw))
+            return str(float(val_raw) * 10)
+        except ValueError:
+            return '0'
+
+    def _scrape_vn30_data(self, browser):
+        """Cào dữ liệu chi tiết bảng giá VN30."""
+        print("[INFO] Scraping VN30 logs...")
         
         try:
-            browser.begin()
-            browser.open_new_tab(self.URL_VN30, name='vietstock.vn')
-            browser.switch_to_tab('vietstock.vn')
+            # browser.begin() # Browser is already started when passed as argument
+            browser.open_new_tab(self.URLs["VN30"], name='vietstock_vn30')
+            browser.switch_to_tab('vietstock_vn30')
             
-            # Đợi bảng giá xuất hiện (Thử nhiều selector cho chắc chắn)
-            selectors = [
-                '//*[@id="price-board-body"]',
-                '//table[@id="price-board"]/tbody',
-                '//div[@id="price-board-container"]//tbody',
-                '//div[contains(@id, "price-board")]//tbody',
-                '//tbody'
-            ]
+            # Đợi SignalR đổ dữ liệu (Rất quan trọng)
+            print("[INFO] Waiting 10s for stock data to sync...")
+            time.sleep(10)
             
+            # 1. Tìm bảng giá theo danh sách ưu tiên
+            print(f"[STEP 1/3] Searching for Price Board using selectors: {len(self.VN30_TABLE_SELECTORS)}")
             found = False
             target_xpath = ""
-            for sel in selectors:
-                if browser.wait_xpath(sel, timeout=30):
+            for sel in self.VN30_TABLE_SELECTORS:
+                if browser.wait_xpath(sel, timeout=15):
                     found = True
                     target_xpath = sel
+                    print(f"   [OK] Found active selector: {target_xpath}")
                     break
             
             if not found:
-                print("❌ Timeout: Không tìm thấy selector bảng giá.")
-                shot = browser.capture_error("vn30_timeout")
+                print("[ERROR] No price board found with tried XPaths.")
+                shot = browser.capture_error("vn30_no_xpath")
                 if self.notifier:
-                    msg = "❌ <b>Lỗi Scraping VN30</b>\nKhông tìm thấy bảng giá Vietstock (Timeout)."
-                    if shot: self.notifier.send_photo(shot, caption=msg)
-                    else: self.notifier.send(msg)
+                    selector_list = "\n".join([f"<code>{s}</code>" for s in self.VN30_TABLE_SELECTORS])
+                    self.notifier.send(
+                        "❌ <b>Scraping VN30 Timeout</b>\n"
+                        "<b>Step:</b> Waiting for Table Selector\n"
+                        "<b>Tried selectors:</b>\n"
+                        f"{selector_list}"
+                    )
                 return []
 
-            # Đợi dữ liệu thực tế xuất hiện (Ít nhất 5 dòng dữ liệu)
+            # 2. Đợi dữ liệu load (Check row count)
+            print("[STEP 2/3] Waiting for actual row data (Min rows: 5)...")
             data_loaded = False
-            for _ in range(15): # Thử đợi thêm tối đa 15s
+            for _ in range(15):
                 row_count = browser.count_xpath(f"{target_xpath}/tr")
                 if row_count >= 5:
                     data_loaded = True
+                    print(f"   [OK] Detected {row_count} data rows.")
                     break
                 time.sleep(1)
             
             if not data_loaded:
-                print(f"❌ Dữ liệu trống hoặc không đủ dòng.")
-                shot = browser.capture_error("vn30_data_empty")
+                print(f"[ERROR] Data empty or rows < 5. Last count: {browser.count_xpath(f'{target_xpath}/tr')}")
                 if self.notifier:
-                    msg = f"❌ <b>Lỗi Scraping VN30</b>\nBảng giá trống hoặc chưa tải xong (Chỉ thấy {browser.count_xpath(f'{target_xpath}/tr')} dòng)."
-                    if shot: self.notifier.send_photo(shot, caption=msg)
-                    else: self.notifier.send(msg)
+                    self.notifier.send(f"❌ <b>Scraping VN30 Error</b>\n<b>Step:</b> Row Count Check\n<b>Detail:</b> Only {browser.count_xpath(f'{target_xpath}/tr')} rows found in <code>{target_xpath}</code>.")
                 return []
                 
-            raw_element = browser.get_xpath(target_xpath)
-            if not raw_element: 
-                return []
-                
-            raw_text = raw_element.text
-            raw_text = raw_text.strip()
-            
-            if not raw_text or len(raw_text) < 50:
-                 shot = browser.capture_error("vn30_text_too_short")
-                 if self.notifier:
-                    msg = "❌ <b>Lỗi Scraping VN30</b>\nDữ liệu bảng giá quá ngắn hoặc trống."
-                    if shot: self.notifier.send_photo(shot, caption=msg)
-                    else: self.notifier.send(msg)
-                 return []
-            
-            # Xử lý text thô: Vietstock có thể trả về newline giữa các cell hoặc space
-            # Phân tách logic: Mỗi mã CK bắt đầu một record mới
-            lines = [l.strip() for l in raw_text.split("\n") if l.strip()]
-
+            # 3. Parsing
+            print("[STEP 3/3] Parsing table...")
+            table_element = browser.get_xpath_element(target_xpath)
+            # Filter rows with ticker symbol (index 0) and not hidden
+            rows = table_element.find_elements(By.TAG_NAME, "tr")
             records = []
-            i = 0
             
-            columns = [
-                "Symbol", "Note",
-                "RefPrice", "Ceiling", "Floor",
-                "BidPrice3", "BidVol3",
-                "BidPrice2", "BidVol2",
-                "BidPrice1", "BidVol1",
-                "MatchPrice", "MatchVol",
-                "Change", "ChangePct",
-                "AskPrice1", "AskVol1",
-                "AskPrice2", "AskVol2",
-                "AskPrice3", "AskVol3",
-                "TotalVol",
-                "High", "Low", "Avg",
-                "ForeignBuy", "ForeignSell"
-            ]
+            for row in rows:
+                if "hidden" in row.get_attribute("class").lower(): continue
+                cells = row.find_elements(By.TAG_NAME, "td")
+                if len(cells) < 20: continue
+                
+                symbol = cells[0].text.strip().replace('*', '')
+                if not symbol or len(symbol) > 10: continue
 
-            # -------------------------------------------------------------
-            # NEW PARSING LOGIC: Ghép dòng linh hoạt (Phòng trường hợp mỗi cell là 1 line)
-            # -------------------------------------------------------------
-            
-            # List các mã VN30 để làm mốc phân tách (nếu cần)
-            # Hoặc đơn giản là mỗi mã CK có 3-4 ký tự in hoa
-            # Hàm hỗ trợ parse number thông minh (Theo yêu cầu mới)
-            def parse_number(p):
-                # Lưu ý: p vẫn là chuỗi thô từ web
-                p_clean = p.strip()
-                if not p_clean or p_clean == '-': return '0'
-                
-                # Luật 1: Nếu là % (tính từ phải qua: %, số, dấu phân cách)
-                if p_clean.endswith('%'):
-                    # Ví dụ: "1.5%" hoặc "1,5%"
-                    if len(p_clean) >= 3 and p_clean[-3] in ['.', ',']:
-                        # Đây là dấu thập phân
-                        val_str = p_clean[:-1].replace(',', '.') # Convert to standard float string
-                        return val_str
-                    else:
-                        # Trường hợp % khác (vd: "15%") -> bỏ % lấy số
-                        return p_clean.replace('%', '').replace(',', '.')
-                
-                # Luật 2: Các số liệu khác (Giá, KL)
-                # "Bỏ hết dấu chấm và phẩy, sau đó nhân 10 sẽ ra giá trị đúng"
-                val_raw = p_clean.replace('.', '').replace(',', '')
-                try:
-                    return str(float(val_raw) * 10)
-                except ValueError:
-                    return '0'
+                # Vietstock Current Table Mapping (2026-03-21):
+                # Col 0: Symbol, Col 10: Price, Col 11: Match Vol, Col 12: +/-, Col 13: %, Col 20: Total Vol
+                price = self.parse_number(cells[10].text)
+                change_pct = cells[13].text.strip()
+                total_vol = self.parse_number(cells[20].text, is_vol=True)
 
-            def is_symbol(s):
-                # Symbol có 3 chữ in hoa, có thể kèm * hoặc ** (vd: BID*, ACB**)
-                return re.match(r'^[A-Z]{3}\**$', s)
-
-            records = []
-            current_symbol_tokens = []
-            
-            # Hàm xử lý data line cũ hoặc list tokens
-            def build_record_from_tokens(tokens):
-                if len(tokens) < 10: return None # Thiếu dữ liệu tối thiểu
-                
-                symbol_raw = tokens[0]
-                symbol = re.sub(r"\*+", "", symbol_raw)
-                mark = ""
-                if symbol_raw.endswith("**"): mark = "warning"
-                elif symbol_raw.endswith("*"): mark = "event"
-                
-                # Gom các tokens còn lại làm data
-                # Nếu tokens[1] là một chuỗi dài (space separated), split nó ra
-                all_data_points = []
-                for t in tokens[1:]:
-                    if " " in t:
-                        all_data_points.extend(t.split(" "))
-                    else:
-                        all_data_points.append(t)
-                
-                # Parse all numbers
-                parts = [parse_number(p) for p in all_data_points]
-                
-                # Map vào columns (Lấy chính xác theo index)
-                # Symbol, Note là 2 cột đầu
-                rec = [symbol, mark] + parts
-                
                 record = {
                     "date": datetime.now().strftime("%Y-%m-%d"),
                     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    "type": "VN30_STOCK",
+                    "type": "STOCK",
                     "symbol": symbol,
-                    "close": float(parts[9]) if len(parts) > 9 else 0,        # MatchPrice
-                    "change": float(parts[11]) if len(parts) > 11 else 0,     # Change
-                    "change_pct": float(parts[12]) if len(parts) > 12 else 0, # ChangePct
-                    "volume": int(float(parts[19])) if len(parts) > 19 else 0 # TotalVol
+                    "Note": "VN30", # Simplified note for now
+                    "close": float(price),
+                    "change_pct": float(change_pct.replace('%', '').replace(',', '.')) if change_pct else 0,
+                    "total_vol": float(total_vol)
                 }
-
-                # Link all defined columns
-                for idx, col_name in enumerate(columns):
-                    if idx < len(rec):
-                        val = rec[idx]
-                        if col_name not in ["Symbol", "Note"] and val:
-                            try: val = float(val)
-                            except ValueError: pass
-                        record[col_name] = val
-                    else:
-                        record[col_name] = ""
-                return record
-
-            # Gom nhóm tokens theo Symbol
-            i = 0
-            while i < len(lines):
-                token = lines[i]
-                if is_symbol(token):
-                    # Nếu đang có dở dang symbol trước đó, build nó
-                    if current_symbol_tokens:
-                        res = build_record_from_tokens(current_symbol_tokens)
-                        if res: records.append(res)
-                    current_symbol_tokens = [token]
-                else:
-                    current_symbol_tokens.append(token)
-                i += 1
-            
-            # Đừng quên cái cuối cùng
-            if current_symbol_tokens:
-                res = build_record_from_tokens(current_symbol_tokens)
-                if res: records.append(res)
+                records.append(record)
             
             return records
+            
         except Exception as e:
-            print(f"❌ Lỗi hệ thống khi Scraping VN30: {e}")
-            if self.notifier:
-                self.notifier.send(f"🚨 <b>Lỗi Hệ thống VN_Finance</b>\nKhông thể hoàn thành cào dữ liệu VN30.\nChi tiết: {str(e)[:200]}")
+            print(f"[ERROR] Exception during VN30 scraping: {e}")
             return []
         finally:
             browser.close()
 
-    def _scrape_indices_summary(self):
-        """Cào VN-Index, VN30-Index và các chỉ số chính."""
-        # Thực tế có thể lấy ngay trên header của bảng giá hoặc trang chủ
-        # Ở đây ta giả lập lấy VN-Index và VN30-Index
-        print("🔍 Đang lấy dữ liệu VN-Index và VN30-Index...")
+    def _build_stock_record(self, tokens):
+        """Chuyển tokens thành record hoàn chỉnh."""
+        # This function is no longer used with the new parsing logic in _scrape_vn30_data
+        # Keeping it for now in case of future refactoring or if the old method is needed.
+        if len(tokens) < 10: return None
         
-        import platform
-        if platform.system() == "Linux":
-            d_path = "/usr/bin/chromedriver"
-            e_args = ["--no-sandbox", "--disable-dev-shm-usage"]
-        else:
-            d_path = self.chromedriver_path
-            e_args = []
+        symbol_raw = tokens[0]
+        symbol = re.sub(r"\*+", "", symbol_raw)
+        
+        # Note phản ánh bản chất nhóm VN30 và cảnh báo
+        mark = "VN30"
+        if symbol_raw.endswith("**"): mark += " [Warning]"
+        elif symbol_raw.endswith("*"): mark += " [Event]"
+        
+        all_data = []
+        for t in tokens[1:]:
+            all_data.extend(t.split(" "))
             
-        browser = ChromeController(driver_path=d_path, headless=True, extra_args=e_args)
+        parts = [self.parse_number(p) for p in all_data]
         
+        record = {
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "type": "STOCK",  # Chuẩn hóa type là STOCK
+            "symbol": symbol,
+            "Note": mark,
+            "close": float(parts[9]) if len(parts) > 9 else 0,
+            "change_pct": float(parts[12]) if len(parts) > 12 else 0,
+            "total_vol": float(parts[19]) if len(parts) > 19 else 0
+        }
+
+        # Map vào các cột cho Sheets
+        row_data = [symbol, mark] + parts
+        for i, col in enumerate(self.COLUMNS_VN_INDEX):
+            if i < len(row_data):
+                val = row_data[i]
+                try: val = float(val) if i >= 2 else val
+                except: pass
+                record[col] = val
+        
+        return record
+
+    def _scrape_indices_summary(self, browser):
+        """Lấy tóm tắt các chỉ số chính (VN-Index, VN30...)."""
+        print("[INFO] Scraping Market Indices...")
+        indices_data = []
+        
+        # Đợi SignalR đổ dữ liệu (Indices cũng cần sync)
+        print("[INFO] Waiting for SignalR indices sync...")
+        
+        for key, cfg in self.INDEX_CONFIG.items():
+            try:
+                # Debug Check
+                print(f"   [DEBUG] ID header-indices in source: {'header-indices' in browser.browser.page_source}")
+                container_xpath = f'(//div[@id="header-indices"]//div[contains(@class, "index-item")])[{"1" if key=="VNINDEX" else "4"}]'
+                container = browser.get_xpath(container_xpath)
+                if container:
+                    print(f"   [DEBUG] Found container for {key}. HTML: {container.get_attribute('outerHTML')[:100]}...")
+                else:
+                    print(f"   [DEBUG] Container NOT FOUND for {key} at {container_xpath}")
+
+                # Optimized: Wait once for the value to appear
+                if browser.wait_xpath(cfg["val_xpath"], timeout=15):
+                    val_text = browser.get_text(cfg["val_xpath"])
+                    chg_text = browser.get_text(cfg["chg_xpath"])
+                else:
+                    val_text = None
+                    chg_text = None
+                
+                if val_text and any(c.isdigit() for c in val_text):
+                    p_val = float(val_text.strip().replace(",", ""))
+                    c_pct = 0.0
+                    if chg_text and "(" in chg_text:
+                        c_pct_str = chg_text.split("(")[-1].replace(")", "").replace("%", "").strip()
+                        c_pct = float(c_pct_str.replace(",", "."))
+                    
+                    indices_data.append({
+                        "date": datetime.now().strftime("%Y-%m-%d"),
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        "symbol": key,
+                        "type": "INDEX",
+                        "Note": "Market Indicator",
+                        "close": p_val,
+                        "change_pct": c_pct
+                    })
+                    print(f"   [INDEX] {cfg['label']}: {val_text}")
+                else:
+                    print(f"   [INDEX] {cfg['label']}... [TIMEOUT OR NO DATA]")
+            except Exception as e:
+                print(f"   [INDEX] Error {key}: {e}")
+        
+        return indices_data
+
+    def _format_price(self, price_raw):
+        """Dinh dang gia VND sang k (viu 27,500 -> 27.5k)."""
+        try:
+            val = float(price_raw)
+            if val == 0: return "0"
+            k_val = val / 1000
+            if k_val >= 10:
+                return f"{k_val:,.1f}k"
+            else:
+                return f"{k_val:,.2f}k"
+        except: return str(price_raw)
+
+    def get_report(self, session="MARKET_SNAPSHOT"):
+        """Tạo báo cáo tổng hợp. Toi uu: dung chung 1 browser session."""
+        import platform
+        d_path = "/usr/bin/chromedriver" if platform.system() == "Linux" else self.chromedriver_path
+        e_args = ["--no-sandbox", "--disable-dev-shm-usage"] if platform.system() == "Linux" else []
+        
+        browser = ChromeController(driver_path=d_path, headless=True, extra_args=e_args)
+        all_indicators = []
+        all_stocks = []
+
         try:
             browser.begin()
-            browser.open_new_tab(self.URL_MARKET, name='vietstock_main')
-            browser.switch_to_tab('vietstock_main')
+            # 1. Cao Indices Summary (Tu trang chu)
+            browser.open_new_tab(self.URLs["MARKET"], name='vietstock')
+            browser.switch_to_tab('vietstock')
+            print("[INFO] Waiting for page navigation...")
+            time.sleep(5)
+            all_indicators = self._scrape_indices_summary(browser)
             
-            # Selector cho VN-Index và VN30 (tùy thuộc vào site Vietstock cập nhật)
-            res = []
-            
-            # 1. VN-Index
-            vni_p = browser.get_text('//*[@id="vne-index-last"]')
-            vni_c = browser.get_text('//*[@id="vne-index-change"]')
-            
-            if vni_p:
-                res.append({
-                    "date": datetime.now().strftime("%Y-%m-%d"),
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    "symbol": "VNINDEX",
-                    "close": float(vni_p.replace(",", "")),
-                    "change_pct": float(vni_c.split("(")[-1].replace(")", "").replace("%", "").strip()) if "(" in vni_c else 0,
-                    "type": "INDEX"
-                })
+            # 2. Cao VN30 Details
+            browser.open_new_tab(self.URLs["VN30"], name='vn30_board')
+            browser.switch_to_tab('vn30_board')
+            all_stocks = self._scrape_vn30_data(browser)
 
-            # 2. VN30-Index
-            vn30_p = browser.get_text('//*[@id="vne-vn30-index-last"]')
-            vn30_c = browser.get_text('//*[@id="vne-vn30-index-change"]')
+            # Update Google Sheets
+            if all_indicators: self.gs.update_financial_optimized("vn-index", all_indicators)
+            if all_stocks: self.gs.update_financial_optimized("vn-index", all_stocks)
 
-            if vn30_p:
-                res.append({
-                    "date": datetime.now().strftime("%Y-%m-%d"),
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    "symbol": "VN30",
-                    "close": float(vn30_p.replace(",", "")),
-                    "change_pct": float(vn30_c.split("(")[-1].replace(")", "").replace("%", "").strip()) if "(" in vn30_c else 0,
-                    "type": "INDEX"
-                })
-            
-            return res
         except Exception as e:
-            shot = browser.capture_error("indices_summary_err")
-            if self.notifier and shot:
-                self.notifier.send_photo(shot, caption=f"❌ <b>Lỗi Scraping Indices</b>\nChi tiết: {str(e)}")
-            return [] # Mock hoặc bỏ qua nếu selector sai
+            print(f"[ERROR] Global VN-Index Scraping Error: {e}")
+            if self.notifier:
+                self.notifier.send(f"❌ <b>Fatal VN-Index Error</b>\n{str(e)[:100]}")
         finally:
             browser.close()
 
-    def _format_price(self, price_vnd):
-        """Hiển thị giá theo đơn vị nghìn (k) (vd: 27500 -> 27.5k)."""
-        if not price_vnd: return "0"
-        return f"{price_vnd/1000:,.2f}k".rstrip('0').rstrip('.') + 'k'
+        if not all_indicators and not all_stocks:
+            return "------------------------------\n<b>Vietnam Market</b>\n[ERROR] Fetching failed.      \n------------------------------"
 
-    def _format_vol(self, vol):
-        """Format khối lượng giao dịch linh hoạt (cp, K, Tr), giới hạn 3 chữ số trước thập phân."""
-        if not vol: return "0 cp"
+        # Format Telegram Report
+        report = f"🇻🇳 <b>Vietnam Market ({session})</b>\n<pre>"
+        if all_indicators:
+            for idx in all_indicators:
+                icon = "🟢" if idx['change_pct'] >= 0 else "🔴"
+                report += f"{icon} {idx['symbol']:<8} {idx['close']:>8,.2f} ({idx['change_pct']:>+5.2f}%)\n"
+            report += "\n"
         
-        if vol >= 999500: # Ngưỡng để 999.5K+ làm tròn thành 1.0Tr
-            return f"{vol/1000000:.1f}Tr cp"
-        elif vol >= 1000:
-            return f"{vol/1000:.1f}K cp"
-        else:
-            return f"{vol:,.0f} cp"
-
-    def get_report(self, session="MARKET_INTRADAY"):
-        """Tạo báo cáo VN-Index dựa theo bản chất của bản tin (Opening vs Trading)."""
-        vn30_stocks = self._scrape_vn30_data()
+        if all_stocks:
+            report += "📈 <b>VN30 - Movers (1D)</b>\n"
+            # Top 3 tang manh va 3 giam manh
+            sorted_stocks = sorted(all_stocks, key=lambda x: x['change_pct'], reverse=True)
+            movers = sorted_stocks[:3]
+            if len(sorted_stocks) > 6: movers += sorted_stocks[-3:]
+            
+            for s in movers:
+                p_fmt = self._format_price(s['close'])
+                report += f"{s['symbol']:<6} {p_fmt:>8} {s['change_pct']:>+7.2f}%\n"
         
-        # Lưu vào Google Sheet (Lưu liên tục nhưng lần chạy Afternoon sẽ là số liệu chốt ngày)
-        if vn30_stocks:
-            self.gs.update_financial_optimized("vn-index", vn30_stocks)
-            
-        if not vn30_stocks:
-            return f"🇻🇳 <b>Thị trường Việt Nam ({session})</b>\n❌ Không lấy được dữ liệu."
-            
-        title = f"🇻🇳 <b>Thị trường Việt Nam ({session})</b>"
-        report = f"{title}\n"
-        
-        # Tiền xử lý dữ liệu Khối ngoại và Khối lượng
-        for s in vn30_stocks:
-            f_buy = s.get('ForeignBuy', '')
-            f_buy = float(f_buy) if f_buy != "" else 0
-            f_sell = s.get('ForeignSell', '')
-            f_sell = float(f_sell) if f_sell != "" else 0
-            s['ForeignNet'] = f_buy - f_sell
-            
-            vol = s.get('TotalVol', '')
-            s['TotalVol'] = float(vol) if vol != "" else 0
-
-        # Phân loại logic theo bản chất bản tin
-        is_opening = any(kw in session.upper() for kw in ["OPENING", "PRE_MARKET", "MORNING"])
-        
-        if is_opening:
-            # 1. Sự kiện / Cảnh báo
-            events = [s for s in vn30_stocks if s.get('Note') in ['event', 'warning']]
-            if events:
-                report += "\n⚠️ <b>Sự kiện / Cảnh báo:</b>\n<pre>"
-                for s in events:
-                    note_str = "Sắp có sự kiện" if s.get('Note') == 'event' else "Bị cảnh báo"
-                    report += f"- {s['symbol']:<5}: {note_str}\n"
-                report += "</pre>"
-                
-            # 2. Khối ngoại (Net Buy/Sell từ dữ liệu chốt phiên hôm qua)
-            sorted_fn = sorted(vn30_stocks, key=lambda x: x['ForeignNet'], reverse=True)
-            top_fb = [s for s in sorted_fn[:3] if s['ForeignNet'] > 0]
-            top_fs = [s for s in sorted_fn[-3:] if s['ForeignNet'] < 0]
-            top_fs = sorted(top_fs, key=lambda x: x['ForeignNet']) # sort ascending cho bán ròng
-            
-            if top_fb or top_fs:
-                report += "\n📊 <b>Khối Ngoại hôm qua (Mua/Bán Ròng):</b>\n<pre>"
-                if top_fb:
-                    report += "📈 Top Mua:\n"
-                    for s in top_fb:
-                        report += f"   {s['symbol']:<4}: +{s['ForeignNet']:,.0f}\n"
-                if top_fs:
-                    report += "📉 Top Bán:\n"
-                    for s in top_fs:
-                        report += f"   {s['symbol']:<4}: {s['ForeignNet']:,.0f}\n"
-                report += "</pre>"
-                
-        else: # Noon and Afternoon
-            # 1. Kịch biên độ (Ceiling / Floor)
-            ceilings = []
-            floors = []
-            for s in vn30_stocks:
-                mp = s.get('MatchPrice', '')
-                ceil = s.get('Ceiling', '')
-                fl = s.get('Floor', '')
-                if mp != "" and ceil != "" and float(mp) > 0 and float(mp) >= float(ceil):
-                    ceilings.append(s)
-                elif mp != "" and fl != "" and float(mp) > 0 and float(mp) <= float(fl):
-                    floors.append(s)
-            
-            if ceilings or floors:
-                report += "\n🚀 <b>Chạm Biên Độ:</b>\n<pre>"
-                for s in ceilings:
-                    vol_str = self._format_vol(s['TotalVol'])
-                    report += f"- {s['symbol']:<5}: {s['MatchPrice']} (Trần) | Vol: {vol_str}\n"
-                for s in floors:
-                    vol_str = self._format_vol(s['TotalVol'])
-                    report += f"- {s['symbol']:<5}: {s['MatchPrice']} (Sàn)  | Vol: {vol_str}\n"
-                report += "</pre>"
-            
-            exclude_symbols = set([s['symbol'] for s in ceilings + floors])
-            
-            # 2. Biến động mạnh (Top 3 Tăng / Giảm) không trùng list kịch biên độ
-            remaining_stocks = [s for s in vn30_stocks if s['symbol'] not in exclude_symbols]
-            sorted_pct = sorted(remaining_stocks, key=lambda x: x['change_pct'], reverse=True)
-            
-            top_gainers = [s for s in sorted_pct if s['change_pct'] > 0][:3]
-            top_losers = [s for s in sorted_pct if s['change_pct'] < 0][-3:]
-            
-            if top_gainers or top_losers:
-                report += "\n🔥 <b>Biến Động Mạnh Nhất:</b>\n<pre>"
-                report += f"{'Mã':<6} {'Giá':>6} {'1D':>7} {'1W':>5} {'1M':>4} {'1Q':>4} {'1Y':>4}\n"
-                report += "-" * 40 + "\n"
-                
-                # Hàm helper in dòng
-                def format_row(s):
-                    price_str = self._format_price(s['close'])
-                    return f"{s['symbol']:<6} {price_str:>7} {s['change_pct']:>+6.1f}% {'-':>4} {'-':>4} {'-':>4} {'-':>4}\n"
-                
-                for s in top_gainers:
-                    report += format_row(s)
-                if top_gainers and top_losers:
-                    report += "...\n"
-                for s in top_losers:
-                    report += format_row(s)
-                report += "</pre>"
-            
-            # 3. Top Thanh khoản (Không loại trừ, lấy Top 3 tuyệt đối trên toàn thị trường)
-            sorted_vol = sorted(vn30_stocks, key=lambda x: x['TotalVol'], reverse=True)[:3]
-            
-            if sorted_vol:
-                report += "\n🌊 <b>Top Thanh Khoản (Khối lượng):</b>\n<pre>"
-                for s in sorted_vol:
-                    vol_str = self._format_vol(s['TotalVol'])
-                    report += f"- {s['symbol']:<5}: {vol_str:>10} ({s['change_pct']:>+4.1f}%)\n"
-                report += "</pre>"
-                
-            # 4. Khối ngoại (Top 3 Mua/Bán Ròng)
-            sorted_fn = sorted(vn30_stocks, key=lambda x: x['ForeignNet'], reverse=True)
-            top_fb = [s for s in sorted_fn[:3] if s['ForeignNet'] > 0]
-            top_fs = [s for s in sorted_fn[-3:] if s['ForeignNet'] < 0]
-            top_fs = sorted(top_fs, key=lambda x: x['ForeignNet'])
-            
-            if top_fb or top_fs:
-                report += "\n📊 <b>Khối Ngoại (Mua/Bán ròng):</b>\n<pre>"
-                if top_fb:
-                    report += "📈 Mua: " + ", ".join([f"{s['symbol']}(+{s['ForeignNet']:,.0f})" for s in top_fb]) + "\n"
-                if top_fs:
-                    report += "📉 Bán: " + ", ".join([f"{s['symbol']}({s['ForeignNet']:,.0f})" for s in top_fs]) + "\n"
-                report += "</pre>"
-
+        report += "</pre>"
         return report

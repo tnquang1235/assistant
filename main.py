@@ -149,6 +149,7 @@ schedule.every().day.at("06:00").do(morning_job)
 schedule.every().day.at("08:00").do(vn_market_watch_job, session_name="MARKET_OPENING")
 schedule.every().day.at("10:00").do(vn_market_watch_job, session_name="MARKET_WATCH")
 schedule.every().day.at("12:00").do(noon_job)
+schedule.every().day.at("14:00").do(vn_market_watch_job, session_name="MARKET_WATCH")
 schedule.every().day.at("16:00").do(afternoon_job)
 schedule.every().day.at("22:00").do(evening_job)
 
