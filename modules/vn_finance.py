@@ -14,14 +14,11 @@ class VNFinanceModule:
     # BẢNG CẤU HÌNH XPATHS (Dễ dàng điều chỉnh khi Web đổi cấu trúc)
     # =========================================================
     
-    # 1. Cấu hình bảng giá VN30 (Dùng trong _scrape_vn30_data)
-    # Thứ tự ưu tiên: Bot sẽ thử từ trên xuống dưới
-    VN30_TABLE_SELECTORS = [
-        '//tbody[@id="price-board-body"]',      # Yêu cầu ưu tiên của người dùng
-        '//table[@id="stock-table"]/tbody',      # Cấu trúc mới phát hiện
-        '//table[@id="price-board"]/tbody',      # Cấu trúc cũ
-        '//tbody'                                # Dự phòng cuối cùng
-    ]
+    # Thời gian chờ (giây) sau khi tải URL VN30 để đảm bảo dữ liệu hiển thị xong
+    VN30_PAGE_LOAD_WAIT = 10
+    
+    # 1. Cấu hình bảng giá VN30 (Chỉ dùng xpath này, không tìm cấu trúc khác)
+    VN30_TABLE_XPATH = '//tbody[@id="price-board-body"]'
 
     # 2. Cấu hình các chỉ số thị trường (Dùng trong _scrape_indices_summary)
     # Structural XPaths (Targeting by position in the indices bar)
@@ -39,8 +36,7 @@ class VNFinanceModule:
     }
 
     URLs = {
-        "VN30": "https://banggia.vietstock.vn/bang-gia/vn30",
-        "MARKET": "https://banggia.vietstock.vn/"
+        "VN30": "https://banggia.vietstock.vn/bang-gia/vn30"
     }
 
     # Danh sách cột chuẩn hóa cho Google Sheets
@@ -87,59 +83,40 @@ class VNFinanceModule:
         print("[INFO] Scraping VN30 logs...")
         
         try:
-            # browser.begin() # Browser is already started when passed as argument
             browser.open_new_tab(self.URLs["VN30"], name='vietstock_vn30')
             browser.switch_to_tab('vietstock_vn30')
             
-            # Đợi SignalR đổ dữ liệu (Rất quan trọng)
-            print("[INFO] Waiting 10s for stock data to sync...")
-            time.sleep(10)
+            # Đợi load dữ liệu
+            print(f"[INFO] Waiting {self.VN30_PAGE_LOAD_WAIT}s for stock data to sync...")
+            time.sleep(self.VN30_PAGE_LOAD_WAIT)
             
-            # 1. Tìm bảng giá theo danh sách ưu tiên
-            print(f"[STEP 1/3] Searching for Price Board using selectors: {len(self.VN30_TABLE_SELECTORS)}")
-            found = False
-            target_xpath = ""
-            for sel in self.VN30_TABLE_SELECTORS:
-                if browser.wait_xpath(sel, timeout=15):
-                    found = True
-                    target_xpath = sel
-                    print(f"   [OK] Found active selector: {target_xpath}")
-                    break
-            
-            if not found:
-                print("[ERROR] No price board found with tried XPaths.")
-                shot = browser.capture_error("vn30_no_xpath")
-                if self.notifier:
-                    selector_list = "\n".join([f"<code>{s}</code>" for s in self.VN30_TABLE_SELECTORS])
-                    self.notifier.send(
-                        "❌ <b>Scraping VN30 Timeout</b>\n"
-                        "<b>Step:</b> Waiting for Table Selector\n"
-                        "<b>Tried selectors:</b>\n"
-                        f"{selector_list}"
-                    )
-                return []
-
-            # 2. Đợi dữ liệu load (Check row count)
-            print("[STEP 2/3] Waiting for actual row data (Min rows: 5)...")
+            # Kiểm tra web đã load chưa bằng việc đếm tr có đủ 30 chưa
+            print(f"[STEP 1/2] Waiting for actual row data in {self.VN30_TABLE_XPATH} (Expected: 30)...")
             data_loaded = False
+            row_count = 0
             for _ in range(15):
-                row_count = browser.count_xpath(f"{target_xpath}/tr")
-                if row_count >= 5:
+                row_count = browser.count_xpath(f"{self.VN30_TABLE_XPATH}/tr")
+                if row_count >= 30:
                     data_loaded = True
                     print(f"   [OK] Detected {row_count} data rows.")
                     break
                 time.sleep(1)
             
             if not data_loaded:
-                print(f"[ERROR] Data empty or rows < 5. Last count: {browser.count_xpath(f'{target_xpath}/tr')}")
+                print(f"[ERROR] Data empty or rows not enough. Last count: {row_count}")
+                shot = browser.capture_error("vn30_load_error")
                 if self.notifier:
-                    self.notifier.send(f"❌ <b>Scraping VN30 Error</b>\n<b>Step:</b> Row Count Check\n<b>Detail:</b> Only {browser.count_xpath(f'{target_xpath}/tr')} rows found in <code>{target_xpath}</code>.")
+                    self.notifier.send(
+                        f"❌ <b>Scraping VN30 Error</b>\n"
+                        f"<b>Step:</b> Row Count Check\n"
+                        f"<b>Detail:</b> Chỉ tìm thấy {row_count} dòng (yêu cầu >= 30) trong <code>{self.VN30_TABLE_XPATH}</code>."
+                    )
                 return []
                 
-            # 3. Parsing
-            print("[STEP 3/3] Parsing table...")
-            table_element = browser.get_xpath_element(target_xpath)
-            # Filter rows with ticker symbol (index 0) and not hidden
+            # Parsing
+            print("[STEP 2/2] Parsing table...")
+            from selenium.webdriver.common.by import By
+            table_element = browser.get_xpath_element(self.VN30_TABLE_XPATH)
             rows = table_element.find_elements(By.TAG_NAME, "tr")
             records = []
             
@@ -151,8 +128,6 @@ class VNFinanceModule:
                 symbol = cells[0].text.strip().replace('*', '')
                 if not symbol or len(symbol) > 10: continue
 
-                # Vietstock Current Table Mapping (2026-03-21):
-                # Col 0: Symbol, Col 10: Price, Col 11: Match Vol, Col 12: +/-, Col 13: %, Col 20: Total Vol
                 price = self.parse_number(cells[10].text)
                 change_pct = cells[13].text.strip()
                 total_vol = self.parse_number(cells[20].text, is_vol=True)
@@ -162,7 +137,7 @@ class VNFinanceModule:
                     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
                     "type": "STOCK",
                     "symbol": symbol,
-                    "Note": "VN30", # Simplified note for now
+                    "Note": "VN30",
                     "close": float(price),
                     "change_pct": float(change_pct.replace('%', '').replace(',', '.')) if change_pct else 0,
                     "total_vol": float(total_vol)
@@ -174,8 +149,6 @@ class VNFinanceModule:
         except Exception as e:
             print(f"[ERROR] Exception during VN30 scraping: {e}")
             return []
-        finally:
-            browser.close()
 
     def _build_stock_record(self, tokens):
         """Chuyển tokens thành record hoàn chỉnh."""

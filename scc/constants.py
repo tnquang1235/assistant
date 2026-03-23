@@ -1,7 +1,7 @@
 from selenium.webdriver.common.keys import Keys
 
-VERSION = "2.1.1"
-LAST_UPDATED = "2026-03-18"
+VERSION = "2.1.0"
+LAST_UPDATED = "2026-03-03"
 
 # Mapping các phím đặc biệt
 SPECIAL_KEYS = {

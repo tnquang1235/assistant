@@ -199,6 +199,10 @@ Hệ thống được thiết kế để chạy 24/7 trên máy chủ từ xa (V
 
 ## 📊 Nhật ký Cập nhật (Changelog)
 
+### v1.3.3 (2026-03-23)
+- **Sửa lỗi ôn từ vựng tiếng Anh**: Khắc phục tình trạng từ nhiều nghĩa (lặp lại nhiều lần trong danh sách), khiến việc cập nhật số lần ôn tập bị lỗi. Lưu ý: hạn chế chỉnh sửa thư viện từ khi phần mềm đang chạy chức năng học để hạn chế lỗi.
+- **Sửa lỗi lấy dữ liệu VN30**: Đơn giản hóa chức năng lấy dữ liệu từ VN30 từ website. Khi website có thay đổi, người dùng nên cập nhật thủ công.
+
 ### v1.3.2 (2026-03-19)
 - **Scraping Resilience**: Tăng timeout lên 30s, hỗ trợ đa selector và kiểm tra tải dữ liệu thực tế.
 - **Parsing Fix**: Áp dụng quy tắc nhân 10 cho giá/khối lượng và xử lý thập phân % đồng nhất.
@@ -215,3 +219,15 @@ Hệ thống được thiết kế để chạy 24/7 trên máy chủ từ xa (V
 - **VN-Index Data Warehouse**: Triển khai hệ thống lưu trữ dữ liệu chứng khoán VN thủ công vào Google Sheets để khắc phục hạn chế của API free.
 - **SRS Refinement**: Cải tiến thuật toán học tiếng Anh với cơ chế tự chữa lành (Self-healing) và Recap thông minh.
 - **API Optimization**: Áp dụng Block Overwrite cho Google Sheets API.
+
+---
+
+## 7. 🛑 CÁC NGUYÊN TẮC QUAN TRỌNG CHỈNH SỬA MÃ NGUỒN (ĐỐI VỚI AI VÀ NGƯỜI DÙNG)
+1. **Tuyệt đối không chỉnh sửa thư viện `scc`**: Đây là thư viện bên ngoài. Mọi chỉnh sửa mang tính phổ quát phải được người dùng khảo sát và trình bày ý tưởng trước.
+2. **Quy tắc lấy dữ liệu VN30**:
+   - URL mặc định luôn là: `https://banggia.vietstock.vn/bang-gia/vn30`
+   - Phải có tham số `VN30_PAGE_LOAD_WAIT` đặt ở đầu class `VNFinanceModule` dễ nhìn thấy để tùy chỉnh thời gian chờ trang tải (ví dụ 10 giây).
+   - Kiểm tra trang đã load đủ bằng cách đếm số lượng dòng trong XPath `//tbody[@id="price-board-body"]/tr` có đủ 30 kết quả hay không.
+   - **Chỉ lấy dữ liệu từ một bảng duy nhất** với cấu trúc XPath `//tbody[@id="price-board-body"]`. **Tuyệt đối không tìm kiếm các cấu trúc mạng dự phòng khác**, vì hệ thống đã được kiểm thử kỹ và việc thêm cấu trúc phụ làm mã nguồn phức tạp không cần thiết.
+   - Giữ nguyên các phương thức xử lý số thập phân (`parse_number`), chụp ảnh lỗi, báo lỗi qua đối tượng Notifier.
+   - **Ưu tiên trên hết**: Tính ổn định, cấu trúc đơn giản để duy trì phần mềm dễ theo dõi, nâng cấp và mở rộng nguồn.
