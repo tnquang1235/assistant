@@ -15,7 +15,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException, JavaScriptException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException, JavascriptException
 
 from .constants import VERSION, LAST_UPDATED, SPECIAL_KEYS
 from .helpers import logger, retry, decode_chrome_file_icon_url
