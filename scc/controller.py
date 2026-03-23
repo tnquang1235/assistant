@@ -8,8 +8,6 @@ import re
 from datetime import datetime
 from typing import Optional, List, Any
 
-import pymsgbox
-import winreg
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -378,6 +376,7 @@ class ChromeController:
         """Lấy phiên bản Chrome từ registry (Windows) hoặc command (Linux/Rasp).</str>"""
         if platform.system() == 'Windows':
             try:
+                import winreg
                 key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Google\Chrome\BLBeacon")
                 v, _ = winreg.QueryValueEx(key, "version")
                 return str(v)
@@ -450,20 +449,32 @@ class ChromeController:
             logger.info(f"Sử dụng ChromeDriver từ lần trước: {last_path}")
             return last_path
 
-        # 4. Hỏi người dùng
-        logger.info("Yêu cầu chọn chromedriver qua dialog...")
-        pbox_path = pymsgbox.prompt("Nhập đường dẫn chromedriver (hoặc nhấp Cancel để chọn file):")
-        if pbox_path and os.path.exists(pbox_path):
-            self._save_config(pbox_path)
-            return pbox_path
+        # 4. Hỏi người dùng qua GUI (Lazy import, bọc lỗi cho môi trường Headless/Linux)
+        try:
+            import pymsgbox
+            import tkinter as tk
+            from tkinter.filedialog import askopenfilename
+            
+            logger.info("Yêu cầu chọn chromedriver qua dialog...")
+            pbox_path = pymsgbox.prompt("Nhập đường dẫn chromedriver (hoặc nhấp Cancel để chọn file):")
+            if pbox_path and os.path.exists(pbox_path):
+                self._save_config(pbox_path)
+                return pbox_path
+            
+            root = tk.Tk()
+            root.withdraw()
+            selected = askopenfilename(title='Select Chrome Driver', filetypes=[("exe", "*.exe"), ("all", "*")])
+            root.destroy()
+            
+            if selected and os.path.exists(selected):
+                self._save_config(selected)
+                return selected
+        except ImportError:
+            logger.warning("Không thể load thư viện GUI (pymsgbox, tkinter) - Bỏ qua bước chọn dialog.")
+        except Exception as e:
+            logger.warning(f"Lỗi khi hiển thị dialog chọn file (có thể do thiếu môi trường Window/Display): {e}")
         
-        from tkinter.filedialog import askopenfilename
-        selected = askopenfilename(title='Select Chrome Driver', filetypes=[("exe", "*.exe"), ("all", "*")])
-        if selected and os.path.exists(selected):
-            self._save_config(selected)
-            return selected
-        
-        raise FileNotFoundError("Không tìm thấy Chromedriver.")
+        raise FileNotFoundError("Không tìm thấy Chromedriver theo cấu hình, vui lòng cài đặt hoặc truyền đường dẫn cụ thể vào driver_path.")
 
     def _save_config(self, driver_path: str):
         try:
