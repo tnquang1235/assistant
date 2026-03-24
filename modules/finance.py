@@ -21,7 +21,7 @@ class FinanceModule:
         "Nikkei225": {"ticker": "^N225", "emoji": "🇯🇵"},
         "KOSPI": {"ticker": "^KS11", "emoji": "🇰🇷"},
         "HangSeng": {"ticker": "^HSI", "emoji": "🇭🇰"},
-        "ShanghaiComp": {"ticker": "^SSEC", "emoji": "🇨🇳"},
+        "ShanghaiComp": {"ticker": "000001.SS", "emoji": "🇨🇳"},
         "CSI300": {"ticker": "000300.SS", "emoji": "🇨🇳"},
         "NIFTY50": {"ticker": "^NSEI", "emoji": "🇮🇳"},
         "Sensex": {"ticker": "^BSESN", "emoji": "🇮🇳"},
@@ -29,9 +29,10 @@ class FinanceModule:
         "SET": {"ticker": "^SET.BK", "emoji": "🇹🇭"},
         "JKSE": {"ticker": "^JKSE", "emoji": "🇮🇩"},
         "KLSE": {"ticker": "^KLSE", "emoji": "🇲🇾"},
-        "PSEi": {"ticker": "^PSI", "emoji": "🇵🇭"},
+        "PSEi": {"ticker": "PSEI.PS", "emoji": "🇵🇭"},
         "Gold": {"ticker": "GC=F", "emoji": "🥇"},
         "Silver": {"ticker": "SI=F", "emoji": "🥈"},
+        "CrudeOil": {"ticker": "CL=F", "emoji": "🛢️"},
         "Bitcoin": {"ticker": "BTC-USD", "emoji": "🪙"}
     }
 
@@ -136,7 +137,7 @@ class FinanceModule:
             visual_len = len(name_label)
             
             # Các emoji 1-char nhưng rộng (wide)
-            if emoji in ["🟡", "⚪", "🪙", "🟠", "🟢", "🔴", "🥇", "🥈", "💎", "💰", "💹", "⚡"]:
+            if emoji in ["🟡", "⚪", "🪙", "🟠", "🟢", "🔴", "🥇", "🥈", "💎", "💰", "💹", "⚡", "🛢️"]:
                 visual_len += 1
             
             padding = " " * max(0, 14 - visual_len)
