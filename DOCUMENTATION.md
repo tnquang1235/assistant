@@ -199,9 +199,9 @@ Hệ thống được thiết kế để chạy 24/7 trên máy chủ từ xa (V
 
 ## 📊 Nhật ký Cập nhật (Changelog)
 
-### v1.3.3 (2026-03-23)
-- **Sửa lỗi ôn từ vựng tiếng Anh**: Khắc phục tình trạng từ nhiều nghĩa (lặp lại nhiều lần trong danh sách), khiến việc cập nhật số lần ôn tập bị lỗi. Lưu ý: hạn chế chỉnh sửa thư viện từ khi phần mềm đang chạy chức năng học để hạn chế lỗi.
-- **Sửa lỗi lấy dữ liệu VN30**: Đơn giản hóa chức năng lấy dữ liệu từ VN30 từ website. Khi website có thay đổi, người dùng nên cập nhật thủ công.
+### v1.4.0 (2026-03-24)
+- **Sửa lỗi nhắc từ tiếng Anh (SRS)**: Khắc phục tình trạng lỗi cập nhật số lần ôn tập đối với các từ mang nhiều ý nghĩa (bị lặp lại nhiều lần trong danh sách). *Lưu ý: Hạn chế chỉnh sửa bảng dữ liệu từ vựng trong lúc phần mềm đang chạy để tránh xung đột hệ thống.*
+- **Lấy dữ liệu VN30 tối ưu (Atomic DOM Snapshot)**: Viết lại cơ chế cào hoàn toàn mới. Thay vì load từng hàng (gây mất thời gian và lệch giá trị), trình duyệt snapshot lại DOM HTML 1 lần duy nhất rồi xử lý thông qua regex các cột thuộc tính `data-value`. Việc này tăng tốc độ đọc dữ liệu cực nhanh và bóc tách toàn vẹn 100% các cột giá tham chiếu, 3 mức dư mua dư bán, khối ngoại... khớp chuẩn mẫu với `vn_index_template.csv`.
 
 ### v1.3.2 (2026-03-19)
 - **Scraping Resilience**: Tăng timeout lên 30s, hỗ trợ đa selector và kiểm tra tải dữ liệu thực tế.

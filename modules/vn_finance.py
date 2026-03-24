@@ -89,7 +89,8 @@ class VNFinanceModule:
             # Đợi load dữ liệu
             print(f"[INFO] Waiting {self.VN30_PAGE_LOAD_WAIT}s for stock data to sync...")
             time.sleep(self.VN30_PAGE_LOAD_WAIT)
-            
+            browser.wait_xpath('//*[@id="header-container"]/div[@class="logo"]')
+
             # Kiểm tra web đã load chưa bằng việc đếm tr có đủ 30 chưa
             print(f"[STEP 1/2] Waiting for actual row data in {self.VN30_TABLE_XPATH} (Expected: 30)...")
             data_loaded = False
@@ -111,39 +112,104 @@ class VNFinanceModule:
                         f"<b>Step:</b> Row Count Check\n"
                         f"<b>Detail:</b> Chỉ tìm thấy {row_count} dòng (yêu cầu >= 30) trong <code>{self.VN30_TABLE_XPATH}</code>."
                     )
+                    # Gửi ảnh chụp màn hình bị lỗi
+                    if shot:
+                        try:
+                            self.notifier.send_photo(shot, caption="📸 Màn hình lỗi VN30")
+                        except AttributeError:
+                            self.notifier.send(f"⚠️ Ảnh lỗi đã được lưu tại: {shot}")
+                            
                 return []
                 
-            # Parsing
-            print("[STEP 2/2] Parsing table...")
-            from selenium.webdriver.common.by import By
-            table_element = browser.get_xpath_element(self.VN30_TABLE_XPATH)
-            rows = table_element.find_elements(By.TAG_NAME, "tr")
+            # Phân tích dữ liệu bằng cách chụp 1 lần duy nhất (Atomic Snapshot)
+            print("[STEP 2/2] Parsing table via outerHTML Snapshot and Raw data-value...")
+            table_element = browser.get_xpath(self.VN30_TABLE_XPATH)
+            table_html = table_element.get_attribute("outerHTML")
+            
             records = []
             
-            for row in rows:
-                if "hidden" in row.get_attribute("class").lower(): continue
-                cells = row.find_elements(By.TAG_NAME, "td")
-                if len(cells) < 20: continue
+            # Dùng regex để tìm tất cả các block <tr>
+            tr_blocks = re.finditer(r'<tr\b([^>]*)>(.*?)</tr>', table_html, re.DOTALL | re.IGNORECASE)
+            
+            def get_val(html_content, col_prefix, row_number):
+                m = re.search(fr'id="{col_prefix}-{row_number}"[^>]*data-value="([^"]+)"', html_content)
+                if m:
+                    try:
+                        return float(m.group(1))
+                    except ValueError:
+                        pass
+                return 0.0
+            
+            for match in tr_blocks:
+                tr_attrs = match.group(1)
+                tr_content = match.group(2)
                 
-                symbol = cells[0].text.strip().replace('*', '')
-                if not symbol or len(symbol) > 10: continue
+                # Bỏ qua dòng bị ẩn
+                if "hidden" in tr_attrs.lower():
+                    continue
+                    
+                # Lấy Mã CK (Symbol)
+                symbol_match = re.search(r'data-symbol="([^"]+)"', tr_attrs)
+                if not symbol_match:
+                    continue
+                symbol = symbol_match.group(1).replace('*', '').strip()
+                if not symbol or len(symbol) > 10:
+                    continue
 
-                price = self.parse_number(cells[10].text)
-                change_pct = cells[13].text.strip()
-                total_vol = self.parse_number(cells[20].text, is_vol=True)
+                # Lấy ID của dòng để tham chiếu giá trị bên trong
+                row_id_match = re.search(r'id="row-(\d+)"', tr_attrs)
+                if not row_id_match:
+                    continue
+                row_id = row_id_match.group(1)
+                
+                # Fetch essential fields
+                price_val = get_val(tr_content, 'lastP', row_id)
+                change_pct_val = get_val(tr_content, 'lastPC', row_id)
+                tVol_val = get_val(tr_content, 'tVol', row_id)
+                foreign_buy = get_val(tr_content, 'foreignBV', row_id)
+                foreign_sell = get_val(tr_content, 'foreignOV', row_id)
+                change_val = get_val(tr_content, 'lastC', row_id)
 
+                # Map fully perfectly to vn_index_template.csv columns
                 record = {
                     "date": datetime.now().strftime("%Y-%m-%d"),
                     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
                     "type": "STOCK",
                     "symbol": symbol,
-                    "Note": "VN30",
-                    "close": float(price),
-                    "change_pct": float(change_pct.replace('%', '').replace(',', '.')) if change_pct else 0,
-                    "total_vol": float(total_vol)
+                    "close": price_val,
+                    "change": change_val,
+                    "change_pct": round(change_pct_val, 2),
+                    "volume": tVol_val,  
+                    "RefPrice": get_val(tr_content, 'basicP', row_id),
+                    "Ceiling": get_val(tr_content, 'ceilP', row_id),
+                    "Floor": get_val(tr_content, 'floorP', row_id),
+                    "MatchPrice": price_val,
+                    "MatchVol": get_val(tr_content, 'lastV', row_id),
+                    "Change": change_val,
+                    "ChangePct": round(change_pct_val, 2),
+                    "High": get_val(tr_content, 'highP', row_id),
+                    "Low": get_val(tr_content, 'lowP', row_id),
+                    "Avg": get_val(tr_content, 'averageP', row_id),
+                    "ForeignBuy": foreign_buy,
+                    "ForeignSell": foreign_sell,
+                    "ForeignNet": foreign_buy - foreign_sell,
+                    "BidPrice3": get_val(tr_content, 'bP3', row_id),
+                    "BidVol3": get_val(tr_content, 'bV3', row_id),
+                    "BidPrice2": get_val(tr_content, 'bP2', row_id),
+                    "BidVol2": get_val(tr_content, 'bV2', row_id),
+                    "BidPrice1": get_val(tr_content, 'bP1', row_id),
+                    "BidVol1": get_val(tr_content, 'bV1', row_id),
+                    "AskPrice1": get_val(tr_content, 'oP1', row_id),
+                    "AskVol1": get_val(tr_content, 'oV1', row_id),
+                    "AskPrice2": get_val(tr_content, 'oP2', row_id),
+                    "AskVol2": get_val(tr_content, 'oV2', row_id),
+                    "AskPrice3": get_val(tr_content, 'oP3', row_id),
+                    "AskVol3": get_val(tr_content, 'oV3', row_id),
+                    "Note": "VN30"
                 }
                 records.append(record)
             
+            print(f"[INFO] Successfully parsed {len(records)} full multi-column records using Snapshot.")
             return records
             
         except Exception as e:
@@ -267,16 +333,9 @@ class VNFinanceModule:
 
         try:
             browser.begin()
-            # 1. Cao Indices Summary (Tu trang chu)
-            browser.open_new_tab(self.URLs["MARKET"], name='vietstock')
-            browser.switch_to_tab('vietstock')
-            print("[INFO] Waiting for page navigation...")
-            time.sleep(5)
-            all_indicators = self._scrape_indices_summary(browser)
-            
-            # 2. Cao VN30 Details
-            browser.open_new_tab(self.URLs["VN30"], name='vn30_board')
-            browser.switch_to_tab('vn30_board')
+            # 1. Crawling VN30 Details
+            # browser.open_new_tab(self.URLs["VN30"], name='vn30_board')
+            # browser.switch_to_tab('vn30_board')
             all_stocks = self._scrape_vn30_data(browser)
 
             # Update Google Sheets
