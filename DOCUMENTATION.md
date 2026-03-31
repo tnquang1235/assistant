@@ -31,9 +31,9 @@ Bản tin Assistant v1.3 được thiết kế theo triết lý **"Snapshot"**: 
         *   **Khối ngoại (Mua/Bán Ròng)**: Cập nhật dòng tiền mạnh nhất đổ vào hoặc rút ra khỏi thị trường.
     *   **📸 Cơ chế Chụp màn hình Lỗi (Visual Errors)**: Khi quá trình cào dữ liệu gặp sự cố (ví dụ: không tìm thấy bảng giá), hệ thống tự động chụp màn hình Chrome và gửi qua Telegram để chẩn đoán nguyên nhân nhanh chóng.
     *   **⚡ Tối ưu tốc độ tải**: Tăng thời gian chờ (Timeout) lên 30s và thêm cơ chế kiểm tra dữ liệu thực tế (ACB symbol check) để đảm bảo cào đủ dữ liệu ngay cả khi mạng chậm.
-    *   **🔢 Quy tắc xử lý số liệu (10x Rule)**:
-        *   **Lỗi giá trị hiển thị**: Bảng số liệu đang bị lỗi hiện thị chưa thống nhất được dấu thập phân (đang sử dụng cả dấu . và ,) và giảm đi so với giá trị thực 10 đơn vị (VD: 44.35 -> 44350 và 3,447,70 -> 3447700).
-        *   **Phần trăm (%)**: Nhận diện dấu thập phân linh hoạt dựa trên vị trí ký tự (Cấp độ B2).
+    *   **🔢 Quy tắc dữ liệu Atomic (Precision Extraction)**:
+        *   **Cơ chế trích xuất**: Thay vì đọc trực tiếp nội dung văn bản hiển thị (vốn dễ bị lỗi dấu chấm/phẩy), hệ thống v1.4.0 sử dụng regex để trích xuất thuộc tính `data-value` từ DOM HTML. Đây là dữ liệu thô (raw data) từ máy chủ, đảm bảo chính xác 100%.
+        *   **Luật xử lý dự phòng (10x Rule)**: Đối với các nguồn dữ liệu văn bản thô (nếu cần), hàm `parse_number` vẫn duy trì quy tắc nhân 10 (`44.35 -> 443.5`) và xử lý linh hoạt dấu thập phân dựa trên vị trí ký tự.
         *   **Hiển thị**: Giá được định dạng đơn vị `k` (VD: 27.5k) để tối ưu không gian tin nhắn.
 
 ---
@@ -79,6 +79,7 @@ Thuật toán phân tầng thời gian dựa trên mức độ ổn định củ
 - **Recap thông minh**: Loại bỏ từ vựng vừa học trong chính phiên đó khỏi danh sách Recap để tối ưu vùng tin nhắn.
 - **Tự chữa lành (Self-healing)**: Tự động tính toán lại lịch trình SRS cho các từ quá hạn (Overdue) ngay khi chúng xuất hiện trở lại.
 - **Xử lý đa định dạng ngày**: Nhận diện linh hoạt `DD/MM/YYYY`, `YYYY-MM-DD` và tự động làm sạch khoảng trắng.
+- **Thứ tự ưu tiên lấy từ (Anti-Collision)**: Hệ thống thực hiện lấy từ theo thứ tự: `Recap` -> `Old` -> `New`. Việc này đảm bảo các từ mới vừa bốc sẽ không bị trùng vào danh sách Recap của chính phiên đó, giúp phân tầng thông tin rõ ràng.
 
 ---
 
@@ -197,6 +198,19 @@ Hệ thống được thiết kế để chạy 24/7 trên máy chủ từ xa (V
 
 ---
 
+## 9. 🧭 Vision - Tầm nhìn phát triển
+### Assistant - version 1.0 
+* Khai thác sự tiện dụng và đơn giản của Telegarm, giúp cung cấp cho người dùng những bản tin cập nhật nhanh chóng về những biến động của thời tiết, thị trường, nhắc nhở việc học tập. 
+* Đây cũng là quá trình giúp hình thành nên những ý tưởng và nguyên lý vận hành của dự án (back-end).
+
+### Assistant - version 2.0 
+* Đây là phiên bản nâng cấp đáng kể về cách trình bày báo cáo và số liệu (font-end). Phiên bản nâng cấp đòi hỏi sự vận dụng nhiều công cụ Data Visualization, website,... để cung cấp thêm cho người dùng những báo cáo tổng quan và đa chiều về tình hình biến động đầy phức tạp của thị trường.
+
+### Partner - Version 3.0 
+* Không còn là một trợ lý, phần mềm sẽ hoạt động như một cộng sự tin cậy (partner) của người dùng khi cung cấp được các số liệu hoặc báo cáo chuyên sâu, xử lý được các công việc phức tạp với độ linh hoạt và chính xác cao hơn. Sự tiến bộ của trí tuệ nhân tạo (AI) trong thời gian vừa qua đã cung cấp cho người dùng một viễn cảnh khả thi về một cộng sự thực thụ.
+
+---
+
 ## 📊 Nhật ký Cập nhật (Changelog)
 
 ### v1.4.0 (2026-03-24)
@@ -231,3 +245,16 @@ Hệ thống được thiết kế để chạy 24/7 trên máy chủ từ xa (V
    - **Chỉ lấy dữ liệu từ một bảng duy nhất** với cấu trúc XPath `//tbody[@id="price-board-body"]`. **Tuyệt đối không tìm kiếm các cấu trúc mạng dự phòng khác**, vì hệ thống đã được kiểm thử kỹ và việc thêm cấu trúc phụ làm mã nguồn phức tạp không cần thiết.
    - Giữ nguyên các phương thức xử lý số thập phân (`parse_number`), chụp ảnh lỗi, báo lỗi qua đối tượng Notifier.
    - **Ưu tiên trên hết**: Tính ổn định, cấu trúc đơn giản để duy trì phần mềm dễ theo dõi, nâng cấp và mở rộng nguồn.
+
+---
+
+## 8. 🛠 Cấu hình Phân bổ Tiếng Anh (English Session Config)
+
+Số lượng từ vựng được điều chỉnh linh hoạt theo từng buổi thông qua hằng số `ENGLISH_CONFIG` trong `main.py`:
+
+| Buổi | Từ mới (New) | Ôn tập trong ngày (Recap) | Ôn tập ngày cũ (Old) |
+| :--- | :---: | :---: | :---: |
+| **Morning** | 2 | 0 | 5 |
+| **Noon** | 2 | 2 | 5 |
+| **Afternoon** | 1 | 4 | 5 |
+| **Evening** | 0 | Tất cả | Tất cả |
