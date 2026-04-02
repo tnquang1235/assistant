@@ -13,7 +13,7 @@ def test_telegram_evening_simulation():
     print("--- Mo phong ban tin buoi toi (Evening) - KHONG thay doi du lieu ---")
     
     # 1. Khoi tao cac module
-    bot = TelegramNotifier(settings.BOT_TOKEN, settings.CHAT_ID)
+    bot = TelegramNotifier(settings.ENGLISH_BOT_TOKEN, settings.CHAT_ID)
     gs_eng = GoogleSheetManager(settings.GOOGLE_CREDENTIAL_FILE, settings.ENGLISH_SHEET_ID, notifier=bot)
     eng = EnglishModule(gs_eng, sheet_name=settings.ENGLISH_SHEET_NAME)
     

@@ -1,17 +1,18 @@
-# 🤖 Assistant v1.4 - Comprehensive Documentation
+# 🤖 Assistant v1.4.1 - Comprehensive Documentation
 
-Assistant v1.4 là hệ thống trợ lý cá nhân tự động gửi bản tin hàng ngày qua Telegram. Hệ thống tích hợp dữ liệu từ nhiều nguồn (OpenWeatherMap, Yahoo Finance, Vietstock) và quản lý tiến trình học tập tiếng Anh thông qua Google Sheets.
+Assistant v1.4.1 là hệ thống trợ lý cá nhân tự động gửi bản tin hàng ngày qua Telegram. Hệ thống tích hợp dữ liệu từ nhiều nguồn (OpenWeatherMap, Yahoo Finance, Vietstock) và quản lý tiến trình học tập tiếng Anh thông qua Google Sheets.
 
 ---
 
 ## 1. 💡 Cấu trúc bản tin (Thứ tự gửi mỗi lần)
 Bản tin Assistant được thiết kế theo triết lý **"Snapshot"**: hiển thị thông tin nhanh, gọn, chuyên nghiệp và tối ưu cho nhiều nền tảng, đặc biệt là Mobile (Telegram).
 
-1.  **Lời chào & Thông tin thời tiết**: Lời chào và thông tin thời tiết 2 Thành phố là Cần Thơ và Hồ Chí Minh, Thông tin thời tiết Hiển thị dạng bảng (Thành phố, Nhiệt độ hiện tại, Cao/Thấp, Độ ẩm, Trạng thái).
-2.  **Từ vựng Tiếng Anh**:
+1.  **Lời chào & Thông tin thời tiết (Bot Chính)**: Lời chào và thông tin thời tiết 2 Thành phố là Cần Thơ và Hồ Chí Minh, Thông tin thời tiết Hiển thị dạng bảng (Thành phố, Nhiệt độ hiện tại, Cao/Thấp, Độ ẩm, Trạng thái).
+2.  **Từ vựng Tiếng Anh (Bot Học Tập)**:
     *   **Từ mới**: Bao gồm Word, Type, IPA, Meaning và Example. 
     *   **Thử thách (Challenge)**: Nếu từ chưa có ví dụ, hệ thống sẽ gọi ý thử thách người dùng đặt câu với cấu trúc ngữ pháp cấp độ **B2** ngẫu nhiên.
     *   **Ôn tập**: Chỉ hiển thị Word và Type để ôn tập theo ngày, dựa theo thuật toán SRS.
+    *   **Tách biệt nội dung**: Thêm lựa chọn gửi nhắc học từ vựng thông qua Bot riêng để tránh quá tải nội dung.
 3.  **Thị trường thế giới**: Gồm các nội dung: Chỉ số hiện tại, % thay đổi so với: 1D, 1W, 1M, 1Q, 1Y.
     *   **Cơ chế so sánh**: Sử dụng ngày dữ liệu mới nhất làm gốc. So sánh 1D dựa trên phiên liền kề gần nhất. Các mốc 1W, 1M, 1Q, 1Y được tính theo đúng ngày dương lịch (nếu trùng ngày nghỉ sẽ lùi về ngày giao dịch gần nhất trước đó).
     *   **Bản tin Sáng**: Toàn bộ chỉ số, sắp xếp theo độ **Mạnh-Yếu** (Biến động % 1D giảm dần).
@@ -197,6 +198,10 @@ Số lượng từ vựng được điều chỉnh linh hoạt theo từng buổ
 ---
 
 ## 📊 Nhật ký Cập nhật (Changelog)
+
+### v1.4.1 (2026-04-03)
+- **Tách biệt Bot Tiếng Anh**: Hệ thống hỗ trợ 02 bot Telegram riêng biệt (`BOT_TOKEN` và `ENGLISH_BOT_TOKEN`) để tránh làm loãng tin nhắn tài chính/thời tiết.
+- **Cấu hình modular**: Cập nhật `config.py` và `.env` để quản lý Token linh hoạt.
 
 ### v1.4.0 (2026-03-24)
 - **Sửa lỗi nhắc từ tiếng Anh (SRS)**: Khắc phục lỗi lặp từ đa nghĩa.

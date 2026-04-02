@@ -6,6 +6,7 @@ load_dotenv()  # đọc .env
 class Settings:
     def __init__(self):
         self.BOT_TOKEN = os.getenv("BOT_TOKEN")
+        self.ENGLISH_BOT_TOKEN = os.getenv("ENGLISH_BOT_TOKEN") or self.BOT_TOKEN  # Default to main bot if not set
         self.WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
         self.CHAT_ID = os.getenv("CHAT_ID")
         self.GOOGLE_CREDENTIAL_FILE = os.getenv("GOOGLE_CREDENTIAL_FILE")

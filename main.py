@@ -14,11 +14,12 @@ from modules.vn_finance import VNFinanceModule
 # ================= INITIALIZATION =================
 
 bot = TelegramNotifier(settings.BOT_TOKEN, settings.CHAT_ID)
+english_bot = TelegramNotifier(settings.ENGLISH_BOT_TOKEN, settings.CHAT_ID)
 
 # Separate managers for each module
 gs_fin = GoogleSheetManager(settings.GOOGLE_CREDENTIAL_FILE, settings.FINANCE_SHEET_ID, notifier=bot)
 gs_weather = GoogleSheetManager(settings.GOOGLE_CREDENTIAL_FILE, settings.WEATHER_SHEET_ID, notifier=bot)
-gs_eng = GoogleSheetManager(settings.GOOGLE_CREDENTIAL_FILE, settings.ENGLISH_SHEET_ID, notifier=bot)
+gs_eng = GoogleSheetManager(settings.GOOGLE_CREDENTIAL_FILE, settings.ENGLISH_SHEET_ID, notifier=english_bot)
 
 vn_sheet_id = getattr(settings, 'VN_FINANCE_SHEET_ID', None)
 if not vn_sheet_id:
@@ -80,7 +81,7 @@ def task_english_vocab(session_name, config):
         num_old=config.get("old", 0)
     )
     title = f"HỌC TIẾNG ANH ({session_name})"
-    bot.send(eng.format_bulletin(title, new_w, recap_w, old_w))
+    english_bot.send(eng.format_bulletin(title, new_w, recap_w, old_w))
 
 def task_market_world(mode="highlights"):
     """Gửi báo cáo thị trường tài chính thế giới."""
